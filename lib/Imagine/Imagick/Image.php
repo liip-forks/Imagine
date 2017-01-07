@@ -794,7 +794,7 @@ final class Image extends AbstractImage
             'png'  => 'image/png',
             'wbmp' => 'image/vnd.wap.wbmp',
             'xbm'  => 'image/xbm',
-            'web'  => 'image/webp'
+            'webp' => 'image/webp',
         );
 
         if (!isset($mimeTypes[$format])) {
