@@ -129,11 +129,13 @@ final class Image extends AbstractImage
      */
     public function crop(PointInterface $start, BoxInterface $size)
     {
+        //FIXME. this gives an error when $size is biger than image, does not with imagick
         if (!$start->in($this->getSize())) {
             throw new OutOfBoundsException('Crop coordinates must start at minimum 0, 0 position from top left corner, crop height and width must be positive integers and must not exceed the current image borders');
         }
         try {
-            if ($this->layers()->count() > 1) {
+            //FIXME: Layers support
+            /*if ($this->layers()->count() > 1) {
                 // Crop each layer separately
                 $this->vips = $this->vips->coalesceImages();
                 foreach ($this->vips as $frame) {
@@ -142,12 +144,14 @@ final class Image extends AbstractImage
                     $frame->setImagePage(0, 0, 0, 0);
                 }
                 $this->vips = $this->vips->deconstructImages();
-            } else {
-                $this->vips->cropImage($size->getWidth(), $size->getHeight(), $start->getX(), $start->getY());
+            } else {*/
+                $this->vips = $this->vips->crop($start->getX(), $start->getY(), $size->getWidth(), $size->getHeight());
+                //$this->vips->cropImage(, , , );
                 // Reset canvas for gif format
-                $this->vips->setImagePage(0, 0, 0, 0);
-            }
-        } catch (\ImagickException $e) {
+            // FIXME?
+                //$this->vips->setImagePage(0, 0, 0, 0);
+            //}
+        } catch (Jcupitt\Vips\Exception $e) {
             throw new RuntimeException('Crop operation failed', $e->getCode(), $e);
         }
         return $this;
@@ -247,9 +251,7 @@ final class Image extends AbstractImage
                 }
                 $this->vips = $this->vips->deconstructImages();
             } else {
-                //FIXME: That may be wrong when ratio is different
-                $this->vips = $this->vips->resize( $size->getWidth() / $this->vips->width);
-                //$this->vips->resizeImage($size->getWidth(), $size->getHeight(), $this->getFilter($filter), 1);
+                $this->vips = $this->vips->resize( $size->getWidth() / $this->vips->width, ['vscale' => $size->getHeight() / $this->vips->height]);
             }
         } catch (\ImagickException $e) {
             throw new RuntimeException('Resize operation failed', $e->getCode(), $e);
@@ -330,7 +332,7 @@ final class Image extends AbstractImage
         } catch (\ImagickException $e) {
             throw new RuntimeException('Get operation failed', $e->getCode(), $e);
         }
-        if ($format == 'jpg' || $format = 'jpeg') {
+        if ($format == 'jpg' || $format == 'jpeg') {
             return $this->vips->jpegsave_buffer(['strip' => true, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
         }
         else if ($format == 'png') {
