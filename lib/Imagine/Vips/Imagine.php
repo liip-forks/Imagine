@@ -27,21 +27,15 @@ use Jcupitt\Vips\Interpretation;
 /**
  * Imagine implementation using the Imagick PHP extension
  */
-final class Imagine extends AbstractImagine
+class Imagine extends AbstractImagine
 {
     /**
      * @throws RuntimeException
      */
     public function __construct()
     {
-        if (!class_exists('Imagick')) {
-            throw new RuntimeException('Imagick not installed');
-        }
-
-        $version = $this->getVersion(new \Imagick());
-
-        if (version_compare('6.2.9', $version) > 0) {
-            throw new RuntimeException(sprintf('ImageMagick version 6.2.9 or higher is required, %s provided', $version));
+        if (!extension_loaded('vips')) {
+            throw new RuntimeException('Vips not installed');
         }
     }
 

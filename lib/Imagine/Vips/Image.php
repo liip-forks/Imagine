@@ -34,7 +34,7 @@ use Jcupitt\Vips\Kernel;
 /**
  * Image implementation using the Imagick PHP extension
  */
-final class Image extends AbstractImage
+class Image extends AbstractImage
 {
     /**
      * @var \Jcupitt\Vips\Image
@@ -73,7 +73,7 @@ final class Image extends AbstractImage
 
         $this->metadata = $metadata;
         $this->detectColorspaceConversionSupport();
-        if (static::$supportsColorspaceConversion) {
+        if (self::$supportsColorspaceConversion) {
             //FIXME:: support this..
             $this->setColorspace($palette);
         }
@@ -94,9 +94,9 @@ final class Image extends AbstractImage
     }
 
     /**
-     * Returns the underlying \Imagick instance
+     * Returns the underlying \Jcupitt\Vips\Image instance
      *
-     * @return \Imagick
+     * @return \Jcupitt\Vips\Image
      */
     public function getVips()
     {
@@ -627,7 +627,7 @@ final class Image extends AbstractImage
      */
     public function usePalette(PaletteInterface $palette)
     {
-        if (!isset(static::$colorspaceMapping[$palette->name()])) {
+        if (!isset(self::$colorspaceMapping[$palette->name()])) {
             throw new InvalidArgumentException(sprintf('The palette %s is not supported by Imagick driver', $palette->name()));
         }
 
@@ -637,7 +637,7 @@ return $this;
             return $this;
         }
 
-        if (!static::$supportsColorspaceConversion) {
+        if (!self::$supportsColorspaceConversion) {
             throw new RuntimeException('Your version of Imagick does not support colorspace conversions.');
         }
 
@@ -910,11 +910,11 @@ return $this;
      */
     private function detectColorspaceConversionSupport()
     {
-        if (null !== static::$supportsColorspaceConversion) {
-            return static::$supportsColorspaceConversion;
+        if (null !== self::$supportsColorspaceConversion) {
+            return self::$supportsColorspaceConversion;
         }
 //FIXME:: not tested
-        return static::$supportsColorspaceConversion = method_exists('Jcupitt\Vips\Image', 'colourspace');
+        return self::$supportsColorspaceConversion = method_exists('Jcupitt\Vips\Image', 'colourspace');
     }
 
     /**
