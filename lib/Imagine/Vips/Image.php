@@ -28,6 +28,7 @@ use Imagine\Image\ProfileInterface;
 use Imagine\Image\ImageInterface;
 use Imagine\Image\Palette\PaletteInterface;
 use Jcupitt\Vips\Image as VipsImage;
+use Jcupitt\Vips\Kernel;
 
 
 /**
@@ -77,7 +78,7 @@ final class Image extends AbstractImage
             $this->setColorspace($palette);
         }
         $this->palette = $palette;
-        // FIXME:: laers..
+        // FIXME:: layers..
         //$this->layers = new Layers($this, $this->palette, $this->vips);
     }
 
@@ -251,7 +252,16 @@ final class Image extends AbstractImage
                 }
                 $this->vips = $this->vips->deconstructImages();
             } else {
+                //FIXME: we only need to do this, if it has visible alpha, not just an alpha channel
+                if ($this->vips->hasAlpha()) {
+                    $this->vips = $this->vips->premultiply();
+                }
                 $this->vips = $this->vips->resize( $size->getWidth() / $this->vips->width, ['vscale' => $size->getHeight() / $this->vips->height]);
+                if ($this->vips->hasAlpha()) {
+                    $this->vips = $this->vips->unpremultiply();
+                }
+
+                //$this->vips = $this->vips->premultiply();
             }
         } catch (\ImagickException $e) {
             throw new RuntimeException('Resize operation failed', $e->getCode(), $e);
