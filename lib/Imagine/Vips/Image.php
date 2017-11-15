@@ -348,6 +348,7 @@ class Image extends AbstractImage
         else if ($format == 'png') {
             return $this->vips->pngsave_buffer(['strip' => true]);
         }
+        //FIXME, webp_quality and webp_lossless
         else if ($format == 'webp') {
             return $this->vips->webpsave_buffer(['strip' => true]);
         }
@@ -631,7 +632,7 @@ class Image extends AbstractImage
             throw new InvalidArgumentException(sprintf('The palette %s is not supported by Imagick driver', $palette->name()));
         }
 
-/* FIXME implement palete support.. */
+/* FIXME implement pallete support.. */
 return $this;
          if ($this->palette->name() === $palette->name()) {
             return $this;
@@ -738,6 +739,10 @@ return $this;
 
         if (isset($options['webp_quality']) && in_array($format, array('webp'))) {
             $vips->setImageCompressionQuality($options['webp_quality']);
+        }
+        //FIXME, support webp lossless. only needs to be fixed in self::get()
+        if (isset($options['webp_lossless']) && in_array($format, array('webp'))) {
+            $image->setOption('webp:lossless', $options['webp_lossless']);
         }
 
 
