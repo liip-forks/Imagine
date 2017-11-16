@@ -59,6 +59,9 @@ class Imagine extends AbstractImagine
      */
     public function create(BoxInterface $size, ColorInterface $color = null)
     {
+
+        //FIXME: no idea how to do that ;)
+        // maybe something like
         $width  = $size->getWidth();
         $height = $size->getHeight();
 
@@ -123,7 +126,7 @@ class Imagine extends AbstractImagine
      */
     public function font($file, $size, ColorInterface $color)
     {
-        return new Font(new \Imagick(), $file, $size, $color);
+        return new Font(null, $file, $size, $color);
     }
 
     /**
@@ -149,20 +152,5 @@ class Imagine extends AbstractImagine
             default:
                 throw new NotSupportedException('Only RGB and CMYK colorspace are currently supported');
         }
-    }
-
-    /**
-     * Returns ImageMagick version
-     *
-     * @param \Imagick $imagick
-     *
-     * @return string
-     */
-    private function getVersion(\Imagick $imagick)
-    {
-        $v = $imagick->getVersion();
-        list($version) = sscanf($v['versionString'], 'ImageMagick %s %04d-%02d-%02d %s %s');
-
-        return $version;
     }
 }

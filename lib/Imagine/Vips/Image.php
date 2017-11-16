@@ -130,7 +130,7 @@ class Image extends AbstractImage
      */
     public function crop(PointInterface $start, BoxInterface $size)
     {
-        //FIXME. this gives an error when $size is biger than image, does not with imagick
+        //FIXME: this gives an error when $size is biger than image, does not with imagick
         if (!$start->in($this->getSize())) {
             throw new OutOfBoundsException('Crop coordinates must start at minimum 0, 0 position from top left corner, crop height and width must be positive integers and must not exceed the current image borders');
         }
@@ -165,6 +165,8 @@ class Image extends AbstractImage
      */
     public function flipHorizontally()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
         try {
             $this->vips->flopImage();
         } catch (\ImagickException $e) {
@@ -181,6 +183,9 @@ class Image extends AbstractImage
      */
     public function flipVertically()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         try {
             $this->vips->flipImage();
         } catch (\ImagickException $e) {
@@ -197,8 +202,9 @@ class Image extends AbstractImage
      */
     public function strip()
     {
-        //FIXME: whatever strip metadata
+        //FIXME: implement in vips
         return $this;
+
         try {
             try {
                 $this->profile($this->palette->profile());
@@ -221,6 +227,9 @@ class Image extends AbstractImage
      */
     public function paste(ImageInterface $image, PointInterface $start)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         if (!$image instanceof self) {
             throw new InvalidArgumentException(sprintf('Imagick\Image can only paste() Imagick\Image instances, %s given', get_class($image)));
         }
@@ -276,6 +285,9 @@ class Image extends AbstractImage
      */
     public function rotate($angle, ColorInterface $background = null)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         $color = $background ? $background : $this->palette->color('fff');
 
         try {
@@ -303,6 +315,9 @@ class Image extends AbstractImage
      */
     public function save($path = null, array $options = array())
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         $path = null === $path ? $this->vips->getImageFilename() : $path;
         if (null === $path) {
             throw new RuntimeException('You can omit save path only if image has been open from a file');
@@ -365,6 +380,8 @@ class Image extends AbstractImage
      */
     public function interlace($scheme)
     {
+        //FIXME: implement in vips
+        
         static $supportedInterlaceSchemes = array(
             ImageInterface::INTERLACE_NONE      => \Imagick::INTERLACE_NO,
             ImageInterface::INTERLACE_LINE      => \Imagick::INTERLACE_LINE,
@@ -426,6 +443,9 @@ class Image extends AbstractImage
      */
     public function draw()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         return new Drawer($this->vips);
     }
 
@@ -434,6 +454,9 @@ class Image extends AbstractImage
      */
     public function effects()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         return new Effects($this->vips);
     }
 
@@ -442,16 +465,8 @@ class Image extends AbstractImage
      */
     public function getSize()
     {
-        try {
-/*            $i = $this->vips->getIteratorIndex();
-            $this->vips->rewind();*/
-            $width  = $this->vips->width;
-            $height = $this->vips->height;
-            //$this->vips->setIteratorIndex($i);
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Could not get size', $e->getCode(), $e);
-        }
-
+        $width  = $this->vips->width;
+        $height = $this->vips->height;
         return new Box($width, $height);
     }
 
@@ -462,6 +477,9 @@ class Image extends AbstractImage
      */
     public function applyMask(ImageInterface $mask)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         if (!$mask instanceof self) {
             throw new InvalidArgumentException('Can only apply instances of Imagine\Imagick\Image as masks');
         }
@@ -495,6 +513,9 @@ class Image extends AbstractImage
      */
     public function mask()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         $mask = $this->copy();
 
         try {
@@ -514,6 +535,9 @@ class Image extends AbstractImage
      */
     public function fill(FillInterface $fill)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         try {
             if ($this->isLinearOpaque($fill)) {
                 $this->applyFastLinear($fill);
@@ -543,6 +567,9 @@ class Image extends AbstractImage
      */
     public function histogram()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         try {
             $pixels = $this->vips->getImageHistogram();
         } catch (\ImagickException $e) {
@@ -561,6 +588,9 @@ class Image extends AbstractImage
      */
     public function getColorAt(PointInterface $point)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         if (!$point->in($this->getSize())) {
             throw new RuntimeException(sprintf('Error getting color at point [%s,%s]. The point must be inside the image of size [%s,%s]', $point->getX(), $point->getY(), $this->getSize()->getWidth(), $this->getSize()->getHeight()));
         }
@@ -587,6 +617,9 @@ class Image extends AbstractImage
      */
     public function pixelToColor(\ImagickPixel $pixel)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         static $colorMapping = array(
             ColorInterface::COLOR_RED     => \Imagick::COLOR_RED,
             ColorInterface::COLOR_GREEN   => \Imagick::COLOR_GREEN,
@@ -632,8 +665,9 @@ class Image extends AbstractImage
             throw new InvalidArgumentException(sprintf('The palette %s is not supported by Imagick driver', $palette->name()));
         }
 
-/* FIXME implement pallete support.. */
-return $this;
+        /* FIXME: implement palette support.. */
+        return $this;
+
          if ($this->palette->name() === $palette->name()) {
             return $this;
         }
@@ -675,6 +709,9 @@ return $this;
      */
     public function profile(ProfileInterface $profile)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         try {
             $this->vips->profileImage('icc', $profile->data());
         } catch (\ImagickException $e) {
@@ -691,6 +728,9 @@ return $this;
      */
     private function flatten()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         /**
          * @see https://github.com/mkoppanen/imagick/issues/45
          */
@@ -805,6 +845,9 @@ return $this;
      */
     private function getColor(ColorInterface $color)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         $pixel = new \ImagickPixel((string) $color);
         $pixel->setColorValue(\Imagick::COLOR_ALPHA, $color->getAlpha() / 100);
 
@@ -830,6 +873,9 @@ return $this;
      */
     private function applyFastLinear(Linear $fill)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         $gradient = new \Imagick();
         $size     = $this->getSize();
         $color    = sprintf('gradient:%s-%s', (string) $fill->getStart(), (string) $fill->getEnd());
@@ -885,6 +931,9 @@ return $this;
      */
     private function setColorspace(PaletteInterface $palette)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         $typeMapping = array(
             // We use Matte variants to preserve alpha
             //
@@ -933,6 +982,9 @@ return $this;
      */
     private function getFilter($filter = ImageInterface::FILTER_UNDEFINED)
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         static $supportedFilters = array(
             ImageInterface::FILTER_UNDEFINED => \Imagick::FILTER_UNDEFINED,
             ImageInterface::FILTER_BESSEL    => \Imagick::FILTER_BESSEL,
