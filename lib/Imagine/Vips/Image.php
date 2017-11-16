@@ -11,6 +11,7 @@
 
 namespace Imagine\Vips;
 
+use Core\Operation\Grayscale;
 use Imagine\Exception\OutOfBoundsException;
 use Imagine\Exception\InvalidArgumentException;
 use Imagine\Exception\RuntimeException;
@@ -22,7 +23,9 @@ use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Image\Fill\FillInterface;
 use Imagine\Image\Fill\Gradient\Horizontal;
 use Imagine\Image\Fill\Gradient\Linear;
+use Imagine\Image\Palette\Color\Gray;
 use Imagine\Image\Palette\ColorParser;
+use Imagine\Image\Palette\RGB;
 use Imagine\Image\Point;
 use Imagine\Image\PointInterface;
 use Imagine\Image\ProfileInterface;
@@ -43,7 +46,7 @@ class Image extends AbstractImage
     /**
      * @var \Jcupitt\Vips\Image
      */
-    private $vips;
+    protected $vips;
     /**
      * @var Layers
      */
@@ -52,6 +55,8 @@ class Image extends AbstractImage
      * @var PaletteInterface
      */
     private $palette;
+
+    private $strip = false;
 
     /**
      * @var Boolean
@@ -190,21 +195,7 @@ class Image extends AbstractImage
      */
     public function strip()
     {
-        //FIXME: implement in vips
-        return $this;
-
-        try {
-            try {
-                $this->profile($this->palette->profile());
-            } catch (\Exception $e) {
-                // here we discard setting the profile as the previous incorporated profile
-                // is corrupted, let's now strip the image
-            }
-            $this->vips->stripImage();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Strip operation failed', $e->getCode(), $e);
-        }
-
+        $this->strip = true;
         return $this;
     }
 
@@ -319,19 +310,28 @@ class Image extends AbstractImage
      */
     public function save($path = null, array $options = array())
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        $path = null === $path ? $this->vips->getImageFilename() : $path;
-        if (null === $path) {
-            throw new RuntimeException('You can omit save path only if image has been open from a file');
-        }
-
         try {
-            $this->prepareOutput($options, $path);
-            $this->vips->writeImages($path, true);
+            $options = $this->applyImageOptions($this->vips, $options, $path);
+            $this->prepareOutput($options);
         } catch (\ImagickException $e) {
-            throw new RuntimeException('Save operation failed', $e->getCode(), $e);
+            throw new RuntimeException('Get operation failed', $e->getCode(), $e);
+        }
+        $format = $options['format'];
+        if ($format == 'jpg' || $format == 'jpeg') {
+            return $this->vips->jpegsave($path, ['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
+        }
+        else if ($format == 'png') {
+            return $this->vips->pngsave($path, ['strip' => $this->strip, 'compression' => $options['png_compression']]);
+        }
+        //FIXME, webp_quality and webp_lossless
+        else if ($format == 'webp') {
+            return $this->vips->webpsave($path, ['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
+        }
+        else {
+            //fallback to imagemagick, not sure pngsave is the best and fastest solution
+            $imagickine = new \Imagine\Imagick\Imagine();
+            $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
+            return $imagick->save($path, $options);
         }
 
         return $this;
@@ -358,18 +358,19 @@ class Image extends AbstractImage
         try {
             $options['format'] = $format;
             $this->prepareOutput($options);
+            $options = $this->applyImageOptions($this->vips, $options);
         } catch (\ImagickException $e) {
             throw new RuntimeException('Get operation failed', $e->getCode(), $e);
         }
         if ($format == 'jpg' || $format == 'jpeg') {
-            return $this->vips->jpegsave_buffer(['strip' => true, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
+            return $this->vips->jpegsave_buffer(['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
         }
         else if ($format == 'png') {
-            return $this->vips->pngsave_buffer(['strip' => true]);
+            return $this->vips->pngsave_buffer(['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
         }
         //FIXME, webp_quality and webp_lossless
         else if ($format == 'webp') {
-            return $this->vips->webpsave_buffer(['strip' => true]);
+            return $this->vips->webpsave_buffer(['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
         }
         else {
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
@@ -425,7 +426,6 @@ class Image extends AbstractImage
         } else {
             $this->layers->merge();
         }*/
-        $this->applyImageOptions($this->vips, $options, $path);
 
         // flatten only if image has multiple layers
         // FIXME:: flatten
@@ -592,16 +592,15 @@ class Image extends AbstractImage
      */
     public function getColorAt(PointInterface $point)
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
 
         if (!$point->in($this->getSize())) {
             throw new RuntimeException(sprintf('Error getting color at point [%s,%s]. The point must be inside the image of size [%s,%s]', $point->getX(), $point->getY(), $this->getSize()->getWidth(), $this->getSize()->getHeight()));
         }
 
         try {
-            $pixel = $this->vips->getImagePixelColor($point->getX(), $point->getY());
-        } catch (\ImagickException $e) {
+            $pixel = $this->vips->getpoint($point->getX(), $point->getY());
+
+        } catch (VipsException $e) {
             throw new RuntimeException('Error while getting image pixel color', $e->getCode(), $e);
         }
 
@@ -619,37 +618,21 @@ class Image extends AbstractImage
      *
      * @throws InvalidArgumentException In case a unknown color is requested
      */
-    public function pixelToColor(\ImagickPixel $pixel)
+    public function pixelToColor(array $pixel)
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        static $colorMapping = array(
-            ColorInterface::COLOR_RED     => \Imagick::COLOR_RED,
-            ColorInterface::COLOR_GREEN   => \Imagick::COLOR_GREEN,
-            ColorInterface::COLOR_BLUE    => \Imagick::COLOR_BLUE,
-            ColorInterface::COLOR_CYAN    => \Imagick::COLOR_CYAN,
-            ColorInterface::COLOR_MAGENTA => \Imagick::COLOR_MAGENTA,
-            ColorInterface::COLOR_YELLOW  => \Imagick::COLOR_YELLOW,
-            ColorInterface::COLOR_KEYLINE => \Imagick::COLOR_BLACK,
-            // There is no gray component in \Imagick, let's use one of the RGB comp
-            ColorInterface::COLOR_GRAY    => \Imagick::COLOR_RED,
-        );
-
-        $alpha = $this->palette->supportsAlpha() ? (int) round($pixel->getColorValue(\Imagick::COLOR_ALPHA) * 100) : null;
-        $palette = $this->palette();
-
-        return $this->palette->color(array_map(function ($color) use ($palette, $pixel, $colorMapping) {
-            if (!isset($colorMapping[$color])) {
-                throw new InvalidArgumentException(sprintf('Color %s is not mapped in Imagick', $color));
-            }
-            $multiplier = 255;
-            if ($palette->name() === PaletteInterface::PALETTE_CMYK) {
-                $multiplier = 100;
-            }
-
-            return $pixel->getColorValue($colorMapping[$color]) * $multiplier;
-        }, $this->palette->pixelDefinition()), $alpha);
+        if ($this->palette->supportsAlpha() && $this->vips->hasAlpha()) {
+            $alpha = array_pop($pixel) / 255 * 100;
+        } else {
+            $alpha = null;
+        }
+        if ($this->palette() instanceof RGB) {
+            return $this->palette()->color($pixel, (int) $alpha);
+        }
+        if ($this->palette() instanceof \Imagine\Image\Palette\Grayscale) {
+            $alpha = array_pop($pixel) / 255 * 100;
+            $g = (int) $pixel[0];
+            return $this->palette()->color([$g, $g, $g], (int) $alpha);
+        }
     }
 
     /**
@@ -761,66 +744,41 @@ class Image extends AbstractImage
      * @throws InvalidArgumentException
      * @throws RuntimeException
      */
-    private function applyImageOptions(VipsImage $vips, array $options, $path)
+    private function applyImageOptions(VipsImage $vips, array $options, $path = null)
     {
-        return;
-        // FIXME: apply all those optoins...
         if (isset($options['format'])) {
             $format = $options['format'];
         } elseif ('' !== $extension = pathinfo($path, \PATHINFO_EXTENSION)) {
             $format = $extension;
         } else {
-            $format = pathinfo($vips->getImageFilename(), \PATHINFO_EXTENSION);
+            //FIXME, may not work
+            $format = pathinfo($vips->filename, \PATHINFO_EXTENSION);
         }
-
         $format = strtolower($format);
+        $options['format'] = $format;
 
-        $options = $this->updateSaveOptions($options);
-
-        if (isset($options['jpeg_quality']) && in_array($format, array('jpeg', 'jpg', 'pjpeg'))) {
-            $vips->setImageCompressionQuality($options['jpeg_quality']);
+        if (!isset($options['jpeg_quality']) && in_array($format, array('jpeg', 'jpg', 'pjpeg'))) {
+            $options['jpeg_quality'] = 92;
         }
-
-        if (isset($options['webp_quality']) && in_array($format, array('webp'))) {
-            $vips->setImageCompressionQuality($options['webp_quality']);
+        if (!isset($options['webp_quality']) && in_array($format, array('webp'))) {
+            $options['webp_quality'] = 80; // FIXME: correct value?
         }
-        //FIXME, support webp lossless. only needs to be fixed in self::get()
-        if (isset($options['webp_lossless']) && in_array($format, array('webp'))) {
-            $image->setOption('webp:lossless', $options['webp_lossless']);
+        if (!isset($options['webp_lossless']) && in_array($format, array('webp'))) {
+            $options['webp_lossless'] = false;
         }
 
 
-        if ((isset($options['png_compression_level']) || isset($options['png_compression_filter'])) && $format === 'png') {
-            // first digit: compression level (default: 7)
+        if ($format === 'png') {
             if (isset($options['png_compression_level'])) {
-                if ($options['png_compression_level'] < 0 || $options['png_compression_level'] > 9) {
-                    throw new InvalidArgumentException('png_compression_level option should be an integer from 0 to 9');
-                }
-                $compression = $options['png_compression_level'] * 10;
-            } else {
-                $compression = 70;
+                $options['png_compression_level'] = 7;
             }
-
-            // second digit: compression filter (default: 5)
+            //FIXME: implement different png_compression_filter
             if (isset($options['png_compression_filter'])) {
-                if ($options['png_compression_filter'] < 0 || $options['png_compression_filter'] > 9) {
-                    throw new InvalidArgumentException('png_compression_filter option should be an integer from 0 to 9');
-                }
-                $compression += $options['png_compression_filter'];
-            } else {
-                $compression += 5;
+                $options['png_compression_filter'] = 5;
             }
-            $v = \Imagick::getVersion();
-            preg_match('/ImageMagick ([0-9]+\.[0-9]+\.[0-9]+)/', $v['versionString'], $v);
-            if (version_compare($v[1], '6.8.7') < 0 ) {
-                //Use this for ImageMagick releases before 6.8.7-5
-                $vips->setImageCompressionQuality($compression);
-            } else {
-            //Use this for ImageMagick releases after 6.8.7-5
-                $vips->setCompressionQuality($compression);
-            }
-        }
 
+        }
+        /** FIXME: do we need this?
         if (isset($options['resolution-units']) && isset($options['resolution-x']) && isset($options['resolution-y'])) {
             if ($options['resolution-units'] == ImageInterface::RESOLUTION_PIXELSPERCENTIMETER) {
                 $vips->setImageUnits(\Imagick::RESOLUTION_PIXELSPERCENTIMETER);
@@ -838,24 +796,8 @@ class Image extends AbstractImage
             $image->setImageResolution($options['resolution-x'], $options['resolution-y']);
             $image->resampleImage($options['resolution-x'], $options['resolution-y'], $this->getFilter($filter), 0);
         }
-    }
-
-    /**
-     * Gets specifically formatted color string from Color instance
-     *
-     * @param ColorInterface $color
-     *
-     * @return \ImagickPixel
-     */
-    private function getColor(ColorInterface $color)
-    {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        $pixel = new \ImagickPixel((string) $color);
-        $pixel->setColorValue(\Imagick::COLOR_ALPHA, $color->getAlpha() / 100);
-
-        return $pixel;
+         */
+        return $options;
     }
 
     /**
@@ -894,6 +836,10 @@ class Image extends AbstractImage
         $this->vips->compositeImage($gradient, \Imagick::COMPOSITE_OVER, 0, 0);
         $gradient->clear();
         $gradient->destroy();
+    }
+
+    protected function updatePalette() {
+        $this->palette = Imagine::createPalette($this->vips);
     }
 
     /**

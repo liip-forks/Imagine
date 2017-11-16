@@ -28,7 +28,7 @@ use Jcupitt\Vips\Image as VipsImage;
 use Jcupitt\Vips\Interpretation;
 
 /**
- * Imagine implementation using the Imagick PHP extension
+ * Imagine implementation using the Vips PHP extension
  */
 class Imagine extends AbstractImagine
 {
@@ -51,7 +51,7 @@ class Imagine extends AbstractImagine
 
         try {
             $vips = VipsImage::newFromFile($path);
-            return new Image($vips, $this->createPalette($vips), $this->getMetadataReader()->readFile($path));
+            return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readFile($path));
         } catch (\Exception $e) {
             throw new RuntimeException(sprintf('Unable to open image %s', $path), $e->getCode(), $e);
         }
@@ -80,7 +80,7 @@ class Imagine extends AbstractImagine
             $blue,
             $alpha
         ]);
-        return new Image($vips, $this->createPalette($vips), new MetadataBag());
+        return new Image($vips, self::createPalette($vips), new MetadataBag());
     }
 
     /**
@@ -90,7 +90,7 @@ class Imagine extends AbstractImagine
     {
         try {
             $vips = VipsImage::newFromBuffer($string);
-            return new Image($vips, $this->createPalette($vips), $this->getMetadataReader()->readData($string));
+            return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readData($string));
         } catch (\Exception $e) {
             throw new RuntimeException('Could not load image from string', $e->getCode(), $e);
         }
@@ -118,7 +118,7 @@ class Imagine extends AbstractImagine
     }
 
     /**
-     * Returns the palette corresponding to an \Imagick resource colorspace
+     * Returns the palette corresponding to an VIPS resource colorspace
      *
      * @param VipsImage $vips
      *
@@ -126,7 +126,7 @@ class Imagine extends AbstractImagine
      *
      * @throws NotSupportedException
      */
-    private function createPalette(VipsImage $vips)
+    public static function createPalette(VipsImage $vips)
     {
         switch ($vips->interpretation) {
             case Interpretation::RGB:
