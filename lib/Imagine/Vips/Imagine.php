@@ -19,8 +19,11 @@ use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Exception\InvalidArgumentException;
 use Imagine\Exception\RuntimeException;
 use Imagine\Image\Palette\CMYK;
+use Imagine\Image\Palette\PaletteInterface;
 use Imagine\Image\Palette\RGB;
 use Imagine\Image\Palette\Grayscale;
+use Jcupitt\Vips\BandFormat;
+use Jcupitt\Vips\Extend;
 use Jcupitt\Vips\Image as VipsImage;
 use Jcupitt\Vips\Interpretation;
 
@@ -48,7 +51,7 @@ class Imagine extends AbstractImagine
 
         try {
             $vips = VipsImage::newFromFile($path);
-            return new Image($vips, $this->createPalette($vips), $this->getMetadataReader()->readData($string));
+            return new Image($vips, $this->createPalette($vips), $this->getMetadataReader()->readFile($path));
         } catch (\Exception $e) {
             throw new RuntimeException(sprintf('Unable to open image %s', $path), $e->getCode(), $e);
         }
@@ -59,40 +62,25 @@ class Imagine extends AbstractImagine
      */
     public function create(BoxInterface $size, ColorInterface $color = null)
     {
-
-        //FIXME: no idea how to do that ;)
-        // maybe something like
         $width  = $size->getWidth();
         $height = $size->getHeight();
-
         $palette = null !== $color ? $color->getPalette() : new RGB();
         $color = null !== $color ? $color : $palette->color('fff');
 
-        try {
-            $pixel = new \ImagickPixel((string) $color);
-            $pixel->setColorValue(\Imagick::COLOR_ALPHA, $color->getAlpha() / 100);
+        list($alpha, $red, $green, $blue) = $this->getColorArrayAlpha($color);
 
-            $imagick = new \Imagick();
-            $imagick->newImage($width, $height, $pixel);
-            $imagick->setImageMatte(true);
-            $imagick->setImageBackgroundColor($pixel);
-
-            if (version_compare('6.3.1', $this->getVersion($imagick)) < 0) {
-                // setImageOpacity was replaced with setImageAlpha in php-imagick v3.4.3
-                if (method_exists($imagick, 'setImageAlpha')) {
-                    $imagick->setImageAlpha($pixel->getColorValue(\Imagick::COLOR_ALPHA));
-                } else {
-                    $imagick->setImageOpacity($pixel->getColorValue(\Imagick::COLOR_ALPHA));
-                }
-            }
-
-            $pixel->clear();
-            $pixel->destroy();
-
-            return new Image($imagick, $palette, new MetadataBag());
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Could not create empty image', $e->getCode(), $e);
-        }
+        // Make a 1x1 pixel with the red channel and cast it to provided format.
+        $pixel = VipsImage::black(1, 1)->add($red)->cast(BandFormat::UCHAR);
+        // Extend this 1x1 pixel to match the origin image dimensions.
+        $vips = $pixel->embed(0, 0, $width, $height, ['extend' => Extend::COPY]);
+        $vips = $vips->copy(['interpretation' => $this->getInterpretation($color->getPalette())]);
+        // Bandwise join the rest of the channels including the alpha channel.
+        $vips = $vips->bandjoin([
+            $green,
+            $blue,
+            $alpha
+        ]);
+        return new Image($vips, $this->createPalette($vips), new MetadataBag());
     }
 
     /**
@@ -153,4 +141,44 @@ class Imagine extends AbstractImagine
                 throw new NotSupportedException('Only RGB and CMYK colorspace are currently supported');
         }
     }
+
+    private function getInterpretation(PaletteInterface $palette) {
+        if ($palette instanceof RGB) {
+            return Interpretation::SRGB;
+        }
+        if ($palette instanceof Grayscale) {
+            return Interpretation::GREY16;
+        }
+        if ($palette instanceof CMYK) {
+            return Interpretation::CMYK;
+        }
+    }
+
+    private function getColorArray(ColorInterface $color): array {
+        return [$color->getValue(ColorInterface::COLOR_RED),
+            $color->getValue(ColorInterface::COLOR_GREEN),
+            $color->getValue(ColorInterface::COLOR_BLUE)
+        ];
+    }
+
+    private function getColorArrayAlpha(ColorInterface $color): array {
+        if ($color->getPalette() instanceof RGB) {
+            return [$color->getAlpha() / 100 * 255,
+                $color->getValue(ColorInterface::COLOR_RED),
+                $color->getValue(ColorInterface::COLOR_GREEN),
+                $color->getValue(ColorInterface::COLOR_BLUE),
+
+            ];
+        }
+        if ($color->getPalette() instanceof Grayscale) {
+            return [$color->getAlpha() / 100 * 255,
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getValue(ColorInterface::COLOR_GRAY),
+
+            ];
+        }
+    }
+
+
 }

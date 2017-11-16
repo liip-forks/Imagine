@@ -22,11 +22,14 @@ use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Image\Fill\FillInterface;
 use Imagine\Image\Fill\Gradient\Horizontal;
 use Imagine\Image\Fill\Gradient\Linear;
+use Imagine\Image\Palette\ColorParser;
 use Imagine\Image\Point;
 use Imagine\Image\PointInterface;
 use Imagine\Image\ProfileInterface;
 use Imagine\Image\ImageInterface;
 use Imagine\Image\Palette\PaletteInterface;
+use Jcupitt\Vips\Direction;
+use Jcupitt\Vips\Exception as VipsException;
 use Jcupitt\Vips\Image as VipsImage;
 use Jcupitt\Vips\Kernel;
 
@@ -80,17 +83,6 @@ class Image extends AbstractImage
         $this->palette = $palette;
         // FIXME:: layers..
         //$this->layers = new Layers($this, $this->palette, $this->vips);
-    }
-
-    /**
-     * Destroys allocated imagick resources
-     */
-    public function __destruct()
-    {
-        if ($this->vips instanceof \Imagick) {
-            $this->vips->clear();
-            $this->vips->destroy();
-        }
     }
 
     /**
@@ -165,11 +157,9 @@ class Image extends AbstractImage
      */
     public function flipHorizontally()
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
         try {
-            $this->vips->flopImage();
-        } catch (\ImagickException $e) {
+            $this->vips = $this->vips->flip(Direction::HORIZONTAL);
+        } catch (\Exception $e) {
             throw new RuntimeException('Horizontal Flip operation failed', $e->getCode(), $e);
         }
 
@@ -183,13 +173,10 @@ class Image extends AbstractImage
      */
     public function flipVertically()
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
         try {
-            $this->vips->flipImage();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Vertical flip operation failed', $e->getCode(), $e);
+            $this->vips = $this->vips->flip(Direction::VERTICAL);
+        } catch (\Exception $e) {
+            throw new RuntimeException('Vertical Flip operation failed', $e->getCode(), $e);
         }
 
         return $this;
@@ -286,11 +273,41 @@ class Image extends AbstractImage
     public function rotate($angle, ColorInterface $background = null)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        //throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
 
         $color = $background ? $background : $this->palette->color('fff');
-
         try {
+
+            switch ($angle) {
+                case 0:
+                case 360:
+                    break;
+                case 90:
+                    $this->vips = $this->vips->rot90();
+                    break;
+                case 180:
+                    $this->vips = $this->vips->rot180();
+                    break;
+                case 270:
+                    $this->vips = $this->vips->rot270();
+                    break;
+                default:
+                    if (!$this->vips->hasAlpha()) {
+
+                        $this->vips = $this->vips->bandjoin(255);
+
+                    }
+                    //FIXME: take color into account
+                    //FIXME: result looks jagged, antialias it somehow
+                    #$interp = \Jcupitt\Vips\Image::newIn
+                    $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
+                    //->flatten(['background' => $this->getColorArray($color)]);
+                //$this->vips = $this->vips->unpremultiply();
+            }
+        } catch (VipsException $e) {
+            throw new RuntimeException('Rotate operation failed. ' . $e->getMessage(), $e->getCode(), $e);
+        }
+/*
             $pixel = $this->getColor($color);
             // if the input image doesn't have an alpha channel, we need to add one
             //  ImageMagick 7 (?) seems not to do that automatically anymore.
@@ -301,10 +318,7 @@ class Image extends AbstractImage
 
             $pixel->clear();
             $pixel->destroy();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Rotate operation failed', $e->getCode(), $e);
-        }
-
+*/
         return $this;
     }
 
@@ -381,7 +395,7 @@ class Image extends AbstractImage
     public function interlace($scheme)
     {
         //FIXME: implement in vips
-        
+
         static $supportedInterlaceSchemes = array(
             ImageInterface::INTERLACE_NONE      => \Imagick::INTERLACE_NO,
             ImageInterface::INTERLACE_LINE      => \Imagick::INTERLACE_LINE,
@@ -1013,4 +1027,5 @@ class Image extends AbstractImage
 
         return $supportedFilters[$filter];
     }
+
 }
