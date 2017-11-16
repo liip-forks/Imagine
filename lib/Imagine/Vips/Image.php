@@ -31,6 +31,7 @@ use Imagine\Image\Palette\PaletteInterface;
 use Jcupitt\Vips\Direction;
 use Jcupitt\Vips\Exception as VipsException;
 use Jcupitt\Vips\Image as VipsImage;
+use Jcupitt\Vips\Interpretation;
 use Jcupitt\Vips\Kernel;
 
 
@@ -272,9 +273,6 @@ class Image extends AbstractImage
      */
     public function rotate($angle, ColorInterface $background = null)
     {
-        //FIXME: implement in vips
-        //throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
         $color = $background ? $background : $this->palette->color('fff');
         try {
 
@@ -297,28 +295,20 @@ class Image extends AbstractImage
                         $this->vips = $this->vips->bandjoin(255);
 
                     }
-                    //FIXME: take color into account
                     //FIXME: result looks jagged, antialias it somehow
-                    #$interp = \Jcupitt\Vips\Image::newIn
+                    $interp = \Jcupitt\Vips\Image::newInterpolator('bicubic');
                     $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
-                    //->flatten(['background' => $this->getColorArray($color)]);
-                //$this->vips = $this->vips->unpremultiply();
+                    $aa = $this->vips->extract_band(3);
+                    if ($color->getAlpha() > 0) {
+                        $im = new Imagine();
+                        $alpha = $im->create(new Box($this->vips->width, $this->vips->height), $color)->getVips();
+                        $aa = $this->vips->extract_band(3);
+                        $this->vips = $aa->ifthenelse($this->vips, $alpha);
+                    }
             }
         } catch (VipsException $e) {
             throw new RuntimeException('Rotate operation failed. ' . $e->getMessage(), $e->getCode(), $e);
         }
-/*
-            $pixel = $this->getColor($color);
-            // if the input image doesn't have an alpha channel, we need to add one
-            //  ImageMagick 7 (?) seems not to do that automatically anymore.
-            if ($this->vips->getImageAlphaChannel() == \Imagick::ALPHACHANNEL_UNDEFINED) {
-                $this->vips->setImageAlphaChannel(\Imagick::ALPHACHANNEL_SET);
-            }
-            $this->vips->rotateimage($pixel, $angle);
-
-            $pixel->clear();
-            $pixel->destroy();
-*/
         return $this;
     }
 
