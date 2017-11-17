@@ -283,7 +283,7 @@ class Image extends AbstractImage
                 default:
                     if (!$this->vips->hasAlpha()) {
                         //FIXME, alpha channel with Grey16 isn't doing well on rotation. there's only alpha in the end
-                        if (!$this->vips->interpretation == Interpretation::GREY16) {
+                        if ($this->vips->interpretation !== Interpretation::GREY16) {
                             $this->vips = $this->vips->bandjoin(255);
                         }
                     }
