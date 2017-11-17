@@ -288,8 +288,10 @@ class Image extends AbstractImage
                         }
                     }
                     //FIXME: result looks jagged, antialias it somehow
-                    $interp = \Jcupitt\Vips\Image::newInterpolator('bicubic');
-                    $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
+                    // only in a future version if php-vips
+                   // $interp = \Jcupitt\Vips\Image::newInterpolator('bicubic');
+                   // $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
+                    $this->vips = $this->vips->similarity(['angle' => $angle]);
                     if ($color->getAlpha() > 0) {
                         $aa = $this->vips->extract_band($this->vips->bands - 1);
                         $im = new Imagine();
