@@ -282,20 +282,22 @@ class Image extends AbstractImage
                     break;
                 default:
                     if (!$this->vips->hasAlpha()) {
-
-                        $this->vips = $this->vips->bandjoin(255);
-
+                        //FIXME, alpha channel with Grey16 isn't doing well on rotation. there's only alpha in the end
+                        if (!$this->vips->interpretation == Interpretation::GREY16) {
+                            $this->vips = $this->vips->bandjoin(255);
+                        }
                     }
                     //FIXME: result looks jagged, antialias it somehow
                     $interp = \Jcupitt\Vips\Image::newInterpolator('bicubic');
                     $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
-                    $aa = $this->vips->extract_band(3);
                     if ($color->getAlpha() > 0) {
+                        $aa = $this->vips->extract_band($this->vips->bands - 1);
                         $im = new Imagine();
                         $alpha = $im->create(new Box($this->vips->width, $this->vips->height), $color)->getVips();
-                        $aa = $this->vips->extract_band(3);
+                        $aa = $this->vips->extract_band($this->vips->bands - 1);
                         $this->vips = $aa->ifthenelse($this->vips, $alpha);
                     }
+
             }
         } catch (VipsException $e) {
             throw new RuntimeException('Rotate operation failed. ' . $e->getMessage(), $e->getCode(), $e);
