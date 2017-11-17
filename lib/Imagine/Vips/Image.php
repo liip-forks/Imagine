@@ -39,7 +39,7 @@ use Jcupitt\Vips\Kernel;
 
 
 /**
- * Image implementation using the Imagick PHP extension
+ * Image implementation using the Vips PHP extension
  */
 class Image extends AbstractImage
 {
@@ -72,7 +72,7 @@ class Image extends AbstractImage
     /**
      * Constructs a new Image instance
      *
-     * @param \Jcupitt\Vips\Image         $imagick
+     * @param \Jcupitt\Vips\Image         vips
      * @param PaletteInterface $palette
      * @param MetadataBag      $metadata
      */
@@ -108,16 +108,7 @@ class Image extends AbstractImage
      */
     public function copy()
     {
-        try {
-            if (version_compare(phpversion("imagick"), "3.1.0b1", ">=") || defined("HHVM_VERSION")) {
-                $clone = clone $this->vips;
-            } else {
-                $clone = $this->vips->clone();
-            }
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Copy operation failed', $e->getCode(), $e);
-        }
-
+        $clone = $this->vips->copy();
         return new self($clone, $this->palette, clone $this->metadata);
     }
 
@@ -150,7 +141,7 @@ class Image extends AbstractImage
             // FIXME?
                 //$this->vips->setImagePage(0, 0, 0, 0);
             //}
-        } catch (Jcupitt\Vips\Exception $e) {
+        } catch (VipsException $e) {
             throw new RuntimeException('Crop operation failed', $e->getCode(), $e);
         }
         return $this;
@@ -165,7 +156,7 @@ class Image extends AbstractImage
     {
         try {
             $this->vips = $this->vips->flip(Direction::HORIZONTAL);
-        } catch (\Exception $e) {
+        } catch (VipsException $e) {
             throw new RuntimeException('Horizontal Flip operation failed', $e->getCode(), $e);
         }
 
@@ -181,7 +172,7 @@ class Image extends AbstractImage
     {
         try {
             $this->vips = $this->vips->flip(Direction::VERTICAL);
-        } catch (\Exception $e) {
+        } catch (VipsException $e) {
             throw new RuntimeException('Vertical Flip operation failed', $e->getCode(), $e);
         }
 
@@ -208,22 +199,6 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        if (!$image instanceof self) {
-            throw new InvalidArgumentException(sprintf('Imagick\Image can only paste() Imagick\Image instances, %s given', get_class($image)));
-        }
-
-        if (!$this->getSize()->contains($image->getSize(), $start)) {
-            throw new OutOfBoundsException('Cannot paste image of the given size at the specified position, as it moves outside of the current image\'s box');
-        }
-
-        try {
-            $this->vips->compositeImage($image->imagick, \Imagick::COMPOSITE_DEFAULT, $start->getX(), $start->getY());
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Paste operation failed', $e->getCode(), $e);
-        }
-
-        return $this;
     }
 
     /**
@@ -248,10 +223,8 @@ class Image extends AbstractImage
                 if ($this->vips->hasAlpha()) {
                     $this->vips = $this->vips->unpremultiply();
                 }
-
-                //$this->vips = $this->vips->premultiply();
             }
-        } catch (\ImagickException $e) {
+        } catch (VipsException $e) {
             throw new RuntimeException('Resize operation failed', $e->getCode(), $e);
         }
         return $this;
@@ -292,6 +265,7 @@ class Image extends AbstractImage
                    // $interp = \Jcupitt\Vips\Image::newInterpolator('bicubic');
                    // $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
                     $this->vips = $this->vips->similarity(['angle' => $angle]);
+                    //FIXME use composite once vips 8.6 is out
                     if ($color->getAlpha() > 0) {
                         $aa = $this->vips->extract_band($this->vips->bands - 1);
                         $im = new Imagine();
@@ -314,12 +288,8 @@ class Image extends AbstractImage
      */
     public function save($path = null, array $options = array())
     {
-        try {
-            $options = $this->applyImageOptions($this->vips, $options, $path);
-            $this->prepareOutput($options);
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Get operation failed', $e->getCode(), $e);
-        }
+        $options = $this->applyImageOptions($this->vips, $options, $path);
+        $this->prepareOutput($options);
         $format = $options['format'];
         if ($format == 'jpg' || $format == 'jpeg') {
             return $this->vips->jpegsave($path, ['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
@@ -327,12 +297,12 @@ class Image extends AbstractImage
         else if ($format == 'png') {
             return $this->vips->pngsave($path, ['strip' => $this->strip, 'compression' => $options['png_compression']]);
         }
-        //FIXME, webp_quality and webp_lossless
         else if ($format == 'webp') {
             return $this->vips->webpsave($path, ['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
         }
         else {
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
+            //FIXME: make this better configurable
             $imagickine = new \Imagine\Imagick\Imagine();
             $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
             return $imagick->save($path, $options);
@@ -359,25 +329,22 @@ class Image extends AbstractImage
      */
     public function get($format, array $options = array())
     {
-        try {
-            $options['format'] = $format;
-            $this->prepareOutput($options);
-            $options = $this->applyImageOptions($this->vips, $options);
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Get operation failed', $e->getCode(), $e);
-        }
+        $options['format'] = $format;
+        $this->prepareOutput($options);
+        $options = $this->applyImageOptions($this->vips, $options);
+
         if ($format == 'jpg' || $format == 'jpeg') {
             return $this->vips->jpegsave_buffer(['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
         }
         else if ($format == 'png') {
             return $this->vips->pngsave_buffer(['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
         }
-        //FIXME, webp_quality and webp_lossless
         else if ($format == 'webp') {
             return $this->vips->webpsave_buffer(['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
         }
         else {
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
+            //FIXME: and maybe make that more customizable
             $imagickine = new \Imagine\Imagick\Imagine();
             $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
             return $imagick->get($format, $options);
@@ -487,33 +454,6 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        if (!$mask instanceof self) {
-            throw new InvalidArgumentException('Can only apply instances of Imagine\Imagick\Image as masks');
-        }
-
-        $size = $this->getSize();
-        $maskSize = $mask->getSize();
-
-        if ($size != $maskSize) {
-            throw new InvalidArgumentException(sprintf('The given mask doesn\'t match current image\'s size, Current mask\'s dimensions are %s, while image\'s dimensions are %s', $maskSize, $size));
-        }
-
-        $mask = $mask->mask();
-        $mask->imagick->negateImage(true);
-
-        try {
-            // remove transparent areas of the original from the mask
-            $mask->imagick->compositeImage($this->vips, \Imagick::COMPOSITE_DSTIN, 0, 0);
-            $this->vips->compositeImage($mask->imagick, \Imagick::COMPOSITE_COPYOPACITY, 0, 0);
-
-            $mask->imagick->clear();
-            $mask->imagick->destroy();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Apply mask operation failed', $e->getCode(), $e);
-        }
-
-        return $this;
     }
 
     /**
@@ -523,17 +463,6 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        $mask = $this->copy();
-
-        try {
-            $mask->imagick->modulateImage(100, 0, 100);
-            $mask->imagick->setImageMatte(false);
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Mask operation failed', $e->getCode(), $e);
-        }
-
-        return $mask;
     }
 
     /**
@@ -545,29 +474,6 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        try {
-            if ($this->isLinearOpaque($fill)) {
-                $this->applyFastLinear($fill);
-            } else {
-                $iterator = $this->vips->getPixelIterator();
-
-                foreach ($iterator as $y => $pixels) {
-                    foreach ($pixels as $x => $pixel) {
-                        $color = $fill->getColor(new Point($x, $y));
-
-                        $pixel->setColor((string) $color);
-                        $pixel->setColorValue(\Imagick::COLOR_ALPHA, $color->getAlpha() / 100);
-                    }
-
-                    $iterator->syncIterator();
-                }
-            }
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Fill operation failed', $e->getCode(), $e);
-        }
-
-        return $this;
     }
 
     /**
@@ -577,18 +483,6 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        try {
-            $pixels = $this->vips->getImageHistogram();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Error while fetching histogram', $e->getCode(), $e);
-        }
-
-        $image = $this;
-
-        return array_map(function (\ImagickPixel $pixel) use ($image) {
-            return $image->pixelToColor($pixel);
-        },$pixels);
     }
 
     /**
@@ -616,7 +510,7 @@ class Image extends AbstractImage
      *
      * Note : this method is public for PHP 5.3 compatibility
      *
-     * @param \ImagickPixel $pixel
+     * @param array $pixel
      *
      * @return ColorInterface
      *
@@ -644,6 +538,9 @@ class Image extends AbstractImage
      */
     public function layers()
     {
+        //FIXME: implement in vips
+        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+
         return $this->layers;
     }
 
@@ -653,39 +550,12 @@ class Image extends AbstractImage
     public function usePalette(PaletteInterface $palette)
     {
         if (!isset(self::$colorspaceMapping[$palette->name()])) {
-            throw new InvalidArgumentException(sprintf('The palette %s is not supported by Imagick driver', $palette->name()));
+            throw new InvalidArgumentException(sprintf('The palette %s is not supported by Vips driver', $palette->name()));
         }
 
         /* FIXME: implement palette support.. */
         return $this;
-
-         if ($this->palette->name() === $palette->name()) {
-            return $this;
-        }
-
-        if (!self::$supportsColorspaceConversion) {
-            throw new RuntimeException('Your version of Imagick does not support colorspace conversions.');
-        }
-
-        try {
-            try {
-                $hasICCProfile = (Boolean) $this->vips->getImageProfile('icc');
-            } catch (\ImagickException $e) {
-                $hasICCProfile = false;
-            }
-
-            if (!$hasICCProfile) {
-                $this->profile($this->palette->profile());
-            }
-
-            $this->profile($palette->profile());
-            $this->setColorspace($palette);
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Failed to set colorspace', $e->getCode(), $e);
-        }
-
-        return $this;
-    }
+   }
 
     /**
      * {@inheritdoc}
@@ -703,13 +573,6 @@ class Image extends AbstractImage
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
 
-        try {
-            $this->vips->profileImage('icc', $profile->data());
-        } catch (\ImagickException $e) {
-            throw new RuntimeException(sprintf('Unable to add profile %s to image', $profile->name()), $e->getCode(), $e);
-        }
-
-        return $this;
     }
 
     /**
@@ -719,19 +582,9 @@ class Image extends AbstractImage
      */
     private function flatten()
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        /**
-         * @see https://github.com/mkoppanen/imagick/issues/45
-         */
         try {
-            if (method_exists($this->vips, 'mergeImageLayers') && defined('Imagick::LAYERMETHOD_UNDEFINED')) {
-                $this->vips = $this->vips->mergeImageLayers(\Imagick::LAYERMETHOD_UNDEFINED);
-            } elseif (method_exists($this->vips, 'flattenImages')) {
-                $this->vips = $this->vips->flattenImages();
-            }
-        } catch (\ImagickException $e) {
+            return  $this->vips->flatten();
+        } catch (VipsException $e) {
             throw new RuntimeException('Flatten operation failed', $e->getCode(), $e);
         }
     }
@@ -741,9 +594,9 @@ class Image extends AbstractImage
      *
      * Applies options before save or output
      *
-     * @param \Imagick $image
-     * @param array    $options
-     * @param string   $path
+     * @param VipsImage $image
+     * @param array     $options
+     * @param string    $path
      *
      * @throws InvalidArgumentException
      * @throws RuntimeException
@@ -804,44 +657,6 @@ class Image extends AbstractImage
         return $options;
     }
 
-    /**
-     * Checks whether given $fill is linear and opaque
-     *
-     * @param FillInterface $fill
-     *
-     * @return Boolean
-     */
-    private function isLinearOpaque(FillInterface $fill)
-    {
-        return $fill instanceof Linear && $fill->getStart()->isOpaque() && $fill->getEnd()->isOpaque();
-    }
-
-    /**
-     * Performs optimized gradient fill for non-opaque linear gradients
-     *
-     * @param Linear $fill
-     */
-    private function applyFastLinear(Linear $fill)
-    {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        $gradient = new \Imagick();
-        $size     = $this->getSize();
-        $color    = sprintf('gradient:%s-%s', (string) $fill->getStart(), (string) $fill->getEnd());
-
-        if ($fill instanceof Horizontal) {
-            $gradient->newPseudoImage($size->getHeight(), $size->getWidth(), $color);
-            $gradient->rotateImage(new \ImagickPixel(), 90);
-        } else {
-            $gradient->newPseudoImage($size->getWidth(), $size->getHeight(), $color);
-        }
-
-        $this->vips->compositeImage($gradient, \Imagick::COMPOSITE_OVER, 0, 0);
-        $gradient->clear();
-        $gradient->destroy();
-    }
-
     protected function updatePalette() {
         $this->palette = Imagine::createPalette($this->vips);
     }
@@ -887,28 +702,7 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        $typeMapping = array(
-            // We use Matte variants to preserve alpha
-            //
-            // (the constants \Imagick::IMGTYPE_TRUECOLORMATTE and \Imagick::IMGTYPE_GRAYSCALEMATTE do not exist anymore in Imagick 7,
-            // to fix this the former values are hard coded here, the documentation under http://php.net/manual/en/imagick.settype.php
-            // doesn't tell us which constants to use and the alternative constants listed under
-            // https://pecl.php.net/package/imagick/3.4.3RC1 do not exist either, so we found no other way to fix it as to hard code
-            // the values here)
-            PaletteInterface::PALETTE_CMYK      => defined('\Imagick::IMGTYPE_TRUECOLORMATTE') ? \Imagick::IMGTYPE_TRUECOLORMATTE : 7,
-            PaletteInterface::PALETTE_RGB       => defined('\Imagick::IMGTYPE_TRUECOLORMATTE') ? \Imagick::IMGTYPE_TRUECOLORMATTE : 7,
-            PaletteInterface::PALETTE_GRAYSCALE => defined('\Imagick::IMGTYPE_GRAYSCALEMATTE') ? \Imagick::IMGTYPE_GRAYSCALEMATTE : 3,
-        );
-
-        if (!isset(static::$colorspaceMapping[$palette->name()])) {
-            throw new InvalidArgumentException(sprintf('The palette %s is not supported by Imagick driver', $palette->name()));
-        }
-
-        $this->vips->setType($typeMapping[$palette->name()]);
-        $this->vips->setColorspace(static::$colorspaceMapping[$palette->name()]);
-        $this->palette = $palette;
-    }
+  }
 
     /**
      * Older imagemagick versions does not support colorspace conversions.
@@ -921,7 +715,7 @@ class Image extends AbstractImage
         if (null !== self::$supportsColorspaceConversion) {
             return self::$supportsColorspaceConversion;
         }
-//FIXME:: not tested
+        //FIXME:: not tested
         return self::$supportsColorspaceConversion = method_exists('Jcupitt\Vips\Image', 'colourspace');
     }
 
@@ -938,34 +732,6 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
-        static $supportedFilters = array(
-            ImageInterface::FILTER_UNDEFINED => \Imagick::FILTER_UNDEFINED,
-            ImageInterface::FILTER_BESSEL    => \Imagick::FILTER_BESSEL,
-            ImageInterface::FILTER_BLACKMAN  => \Imagick::FILTER_BLACKMAN,
-            ImageInterface::FILTER_BOX       => \Imagick::FILTER_BOX,
-            ImageInterface::FILTER_CATROM    => \Imagick::FILTER_CATROM,
-            ImageInterface::FILTER_CUBIC     => \Imagick::FILTER_CUBIC,
-            ImageInterface::FILTER_GAUSSIAN  => \Imagick::FILTER_GAUSSIAN,
-            ImageInterface::FILTER_HANNING   => \Imagick::FILTER_HANNING,
-            ImageInterface::FILTER_HAMMING   => \Imagick::FILTER_HAMMING,
-            ImageInterface::FILTER_HERMITE   => \Imagick::FILTER_HERMITE,
-            ImageInterface::FILTER_LANCZOS   => \Imagick::FILTER_LANCZOS,
-            ImageInterface::FILTER_MITCHELL  => \Imagick::FILTER_MITCHELL,
-            ImageInterface::FILTER_POINT     => \Imagick::FILTER_POINT,
-            ImageInterface::FILTER_QUADRATIC => \Imagick::FILTER_QUADRATIC,
-            ImageInterface::FILTER_SINC      => \Imagick::FILTER_SINC,
-            ImageInterface::FILTER_TRIANGLE  => \Imagick::FILTER_TRIANGLE
-        );
-
-        if (!array_key_exists($filter, $supportedFilters)) {
-            throw new InvalidArgumentException(sprintf(
-                'The resampling filter "%s" is not supported by Imagick driver.',
-                $filter
-            ));
-        }
-
-        return $supportedFilters[$filter];
     }
 
 }
