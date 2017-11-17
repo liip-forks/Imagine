@@ -62,24 +62,7 @@ class Imagine extends AbstractImagine
      */
     public function create(BoxInterface $size, ColorInterface $color = null)
     {
-        $width  = $size->getWidth();
-        $height = $size->getHeight();
-        $palette = null !== $color ? $color->getPalette() : new RGB();
-        $color = null !== $color ? $color : $palette->color('fff');
-
-        list($alpha, $red, $green, $blue) = $this->getColorArrayAlpha($color);
-
-        // Make a 1x1 pixel with the red channel and cast it to provided format.
-        $pixel = VipsImage::black(1, 1)->add($red)->cast(BandFormat::UCHAR);
-        // Extend this 1x1 pixel to match the origin image dimensions.
-        $vips = $pixel->embed(0, 0, $width, $height, ['extend' => Extend::COPY]);
-        $vips = $vips->copy(['interpretation' => $this->getInterpretation($color->getPalette())]);
-        // Bandwise join the rest of the channels including the alpha channel.
-        $vips = $vips->bandjoin([
-            $green,
-            $blue,
-            $alpha
-        ]);
+        $vips = Image::generateImage($size, $color);
         return new Image($vips, self::createPalette($vips), new MetadataBag());
     }
 
@@ -139,44 +122,6 @@ class Imagine extends AbstractImagine
                 return new Grayscale();
             default:
                 throw new NotSupportedException('Only RGB and CMYK colorspace are currently supported');
-        }
-    }
-
-    private function getInterpretation(PaletteInterface $palette) {
-        if ($palette instanceof RGB) {
-            return Interpretation::SRGB;
-        }
-        if ($palette instanceof Grayscale) {
-            return Interpretation::GREY16;
-        }
-        if ($palette instanceof CMYK) {
-            return Interpretation::CMYK;
-        }
-    }
-
-    private function getColorArray(ColorInterface $color): array {
-        return [$color->getValue(ColorInterface::COLOR_RED),
-            $color->getValue(ColorInterface::COLOR_GREEN),
-            $color->getValue(ColorInterface::COLOR_BLUE)
-        ];
-    }
-
-    private function getColorArrayAlpha(ColorInterface $color): array {
-        if ($color->getPalette() instanceof RGB) {
-            return [$color->getAlpha() / 100 * 255,
-                $color->getValue(ColorInterface::COLOR_RED),
-                $color->getValue(ColorInterface::COLOR_GREEN),
-                $color->getValue(ColorInterface::COLOR_BLUE),
-
-            ];
-        }
-        if ($color->getPalette() instanceof Grayscale) {
-            return [$color->getAlpha() / 100 * 255,
-                $color->getValue(ColorInterface::COLOR_GRAY),
-                $color->getValue(ColorInterface::COLOR_GRAY),
-                $color->getValue(ColorInterface::COLOR_GRAY),
-
-            ];
         }
     }
 

@@ -31,8 +31,10 @@ use Imagine\Image\PointInterface;
 use Imagine\Image\ProfileInterface;
 use Imagine\Image\ImageInterface;
 use Imagine\Image\Palette\PaletteInterface;
+use Jcupitt\Vips\BandFormat;
 use Jcupitt\Vips\Direction;
 use Jcupitt\Vips\Exception as VipsException;
+use Jcupitt\Vips\Extend;
 use Jcupitt\Vips\Image as VipsImage;
 use Jcupitt\Vips\Interpretation;
 use Jcupitt\Vips\Kernel;
@@ -108,7 +110,7 @@ class Image extends AbstractImage
      */
     public function copy()
     {
-        $clone = $this->vips->copy();
+        $clone = clone $this->vips->copy();
         return new self($clone, $this->palette, clone $this->metadata);
     }
 
@@ -198,9 +200,56 @@ class Image extends AbstractImage
     public function paste(ImageInterface $image, PointInterface $start)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        /** @var VipsImage $inVips */
+        $inVips = $image->getVips();
+
+        if (!$inVips->hasAlpha()) {
+            if ($this->vips->hasAlpha()) {
+                $inVips = $inVips->bandjoin([255]);
+            }
+        }
+
+        if (!$this->vips->hasAlpha()) {
+            if ($inVips->hasAlpha()) {
+                $this->vips = $this->vips->bandjoin([255]);
+            }
+        }
+        $image = $image->extendImage($this->getSize(), $start)->getVips();
+        $this->vips = $this->vips->composite([$this->vips, $image], [2]);
+        return $this;
     }
 
+    protected function extendImage(BoxInterface $box, PointInterface $start) {
+        $color = new \Imagine\Image\Palette\Color\RGB(new RGB(), [255,255,255], 0);
+        if (!$this->vips->hasAlpha()) {
+            $this->vips = $this->vips->bandjoin([255]);
+        }
+        $new = self::generateImage($box, $color);
+        #$this->vips = $new;
+        $this->vips = $new->insert($this->vips, $start->getX(), $start->getY());
+        return $this;
+    }
+
+    public static function generateImage(BoxInterface $size, ColorInterface $color = null) {
+        $width  = $size->getWidth();
+        $height = $size->getHeight();
+        $palette = null !== $color ? $color->getPalette() : new RGB();
+        $color = null !== $color ? $color : $palette->color('fff');
+        list($red, $green, $blue, $alpha) = self::getColorArrayAlpha($color);
+
+        // Make a 1x1 pixel with the red channel and cast it to provided format.
+        $pixel = VipsImage::black(1, 1)->add($red)->cast(BandFormat::UCHAR);
+        // Extend this 1x1 pixel to match the origin image dimensions.
+        $vips = $pixel->embed(0, 0, $width, $height, ['extend' => Extend::COPY]);
+        $vips = $vips->copy(['interpretation' => self::getInterpretation($color->getPalette())]);
+        // Bandwise join the rest of the channels including the alpha channel.
+        $vips = $vips->bandjoin([
+            $green,
+            $blue,
+            $alpha
+        ]);
+        return $vips;
+    }
     /**
      * {@inheritdoc}
      */
@@ -260,19 +309,8 @@ class Image extends AbstractImage
                             $this->vips = $this->vips->bandjoin(255);
                         }
                     }
-                    //FIXME: result looks jagged, antialias it somehow
-                    // only in a future version if php-vips
-                   // $interp = \Jcupitt\Vips\Image::newInterpolator('bicubic');
-                   // $this->vips = $this->vips->similarity(['angle' => $angle, 'interpolate' => $interp]);
-                    $this->vips = $this->vips->similarity(['angle' => $angle]);
-                    //FIXME use composite once vips 8.6 is out
-                    if ($color->getAlpha() > 0) {
-                        $aa = $this->vips->extract_band($this->vips->bands - 1);
-                        $im = new Imagine();
-                        $alpha = $im->create(new Box($this->vips->width, $this->vips->height), $color)->getVips();
-                        $aa = $this->vips->extract_band($this->vips->bands - 1);
-                        $this->vips = $aa->ifthenelse($this->vips, $alpha);
-                    }
+                    //needs upcoming vips 8.6
+                    $this->vips = $this->vips->similarity(['angle' => $angle, 'background' => self::getColorArrayAlpha($color)]);
 
             }
         } catch (VipsException $e) {
@@ -295,7 +333,7 @@ class Image extends AbstractImage
             return $this->vips->jpegsave($path, ['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
         }
         else if ($format == 'png') {
-            return $this->vips->pngsave($path, ['strip' => $this->strip, 'compression' => $options['png_compression']]);
+            return $this->vips->pngsave($path, ['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
         }
         else if ($format == 'webp') {
             return $this->vips->webpsave($path, ['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
@@ -539,7 +577,7 @@ class Image extends AbstractImage
     public function layers()
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+      //  throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
 
         return $this->layers;
     }
@@ -626,11 +664,11 @@ class Image extends AbstractImage
 
 
         if ($format === 'png') {
-            if (isset($options['png_compression_level'])) {
+            if (!isset($options['png_compression_level'])) {
                 $options['png_compression_level'] = 7;
             }
             //FIXME: implement different png_compression_filter
-            if (isset($options['png_compression_filter'])) {
+            if (!isset($options['png_compression_filter'])) {
                 $options['png_compression_filter'] = 5;
             }
 
@@ -732,6 +770,46 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+    }
+
+    protected static function getInterpretation(PaletteInterface $palette) {
+        if ($palette instanceof RGB) {
+            return Interpretation::SRGB;
+        }
+        if ($palette instanceof Grayscale) {
+            return Interpretation::GREY16;
+        }
+        if ($palette instanceof CMYK) {
+            return Interpretation::CMYK;
+        }
+    }
+
+
+    private function getColorArray(ColorInterface $color): array {
+        return [$color->getValue(ColorInterface::COLOR_RED),
+            $color->getValue(ColorInterface::COLOR_GREEN),
+            $color->getValue(ColorInterface::COLOR_BLUE)
+        ];
+    }
+
+    public static function getColorArrayAlpha(ColorInterface $color): array {
+        if ($color->getPalette() instanceof RGB) {
+            return [
+                $color->getValue(ColorInterface::COLOR_RED),
+                $color->getValue(ColorInterface::COLOR_GREEN),
+                $color->getValue(ColorInterface::COLOR_BLUE),
+                $color->getAlpha() / 100 * 255
+
+            ];
+        }
+        if ($color->getPalette() instanceof Grayscale) {
+            return [
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getAlpha() / 100 * 255
+            ];
+        }
     }
 
 }
