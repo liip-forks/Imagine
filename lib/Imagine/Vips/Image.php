@@ -12,36 +12,31 @@
 namespace Imagine\Vips;
 
 use Core\Operation\Grayscale;
-use Imagine\Exception\OutOfBoundsException;
 use Imagine\Exception\InvalidArgumentException;
+use Imagine\Exception\OutOfBoundsException;
 use Imagine\Exception\RuntimeException;
 use Imagine\Image\AbstractImage;
 use Imagine\Image\Box;
 use Imagine\Image\BoxInterface;
-use Imagine\Image\Metadata\MetadataBag;
-use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Image\Fill\FillInterface;
 use Imagine\Image\Fill\Gradient\Horizontal;
-use Imagine\Image\Fill\Gradient\Linear;
-use Imagine\Image\Palette\Color\Gray;
-use Imagine\Image\Palette\ColorParser;
+use Imagine\Image\ImageInterface;
+use Imagine\Image\Metadata\MetadataBag;
+use Imagine\Image\Palette\Color\ColorInterface;
+use Imagine\Image\Palette\PaletteInterface;
 use Imagine\Image\Palette\RGB;
 use Imagine\Image\Point;
 use Imagine\Image\PointInterface;
 use Imagine\Image\ProfileInterface;
-use Imagine\Image\ImageInterface;
-use Imagine\Image\Palette\PaletteInterface;
 use Jcupitt\Vips\BandFormat;
 use Jcupitt\Vips\Direction;
 use Jcupitt\Vips\Exception as VipsException;
 use Jcupitt\Vips\Extend;
 use Jcupitt\Vips\Image as VipsImage;
 use Jcupitt\Vips\Interpretation;
-use Jcupitt\Vips\Kernel;
-
 
 /**
- * Image implementation using the Vips PHP extension
+ * Image implementation using the Vips PHP extension.
  */
 class Image extends AbstractImage
 {
@@ -61,18 +56,18 @@ class Image extends AbstractImage
     private $strip = false;
 
     /**
-     * @var Boolean
+     * @var bool
      */
     private static $supportsColorspaceConversion;
 
-    private static $colorspaceMapping = array(
-        PaletteInterface::PALETTE_CMYK      => \Imagick::COLORSPACE_CMYK,
-        PaletteInterface::PALETTE_RGB       => \Imagick::COLORSPACE_RGB,
+    private static $colorspaceMapping = [
+        PaletteInterface::PALETTE_CMYK => \Imagick::COLORSPACE_CMYK,
+        PaletteInterface::PALETTE_RGB => \Imagick::COLORSPACE_RGB,
         PaletteInterface::PALETTE_GRAYSCALE => \Imagick::COLORSPACE_GRAY,
-    );
+    ];
 
     /**
-     * Constructs a new Image instance
+     * Constructs a new Image instance.
      *
      * @param \Jcupitt\Vips\Image         vips
      * @param PaletteInterface $palette
@@ -94,7 +89,15 @@ class Image extends AbstractImage
     }
 
     /**
-     * Returns the underlying \Jcupitt\Vips\Image instance
+     * {@inheritdoc}
+     */
+    public function __toString()
+    {
+        return $this->get('png');
+    }
+
+    /**
+     * Returns the underlying \Jcupitt\Vips\Image instance.
      *
      * @return \Jcupitt\Vips\Image
      */
@@ -111,6 +114,7 @@ class Image extends AbstractImage
     public function copy()
     {
         $clone = clone $this->vips->copy();
+
         return new self($clone, $this->palette, clone $this->metadata);
     }
 
@@ -146,6 +150,7 @@ class Image extends AbstractImage
         } catch (VipsException $e) {
             throw new RuntimeException('Crop operation failed', $e->getCode(), $e);
         }
+
         return $this;
     }
 
@@ -189,6 +194,7 @@ class Image extends AbstractImage
     public function strip()
     {
         $this->strip = true;
+
         return $this;
     }
 
@@ -216,22 +222,13 @@ class Image extends AbstractImage
         }
         $image = $image->extendImage($this->getSize(), $start)->getVips();
         $this->vips = $this->vips->composite([$this->vips, $image], [2]);
+
         return $this;
     }
 
-    protected function extendImage(BoxInterface $box, PointInterface $start) {
-        $color = new \Imagine\Image\Palette\Color\RGB(new RGB(), [255,255,255], 0);
-        if (!$this->vips->hasAlpha()) {
-            $this->vips = $this->vips->bandjoin([255]);
-        }
-        $new = self::generateImage($box, $color);
-        #$this->vips = $new;
-        $this->vips = $new->insert($this->vips, $start->getX(), $start->getY());
-        return $this;
-    }
-
-    public static function generateImage(BoxInterface $size, ColorInterface $color = null) {
-        $width  = $size->getWidth();
+    public static function generateImage(BoxInterface $size, ColorInterface $color = null)
+    {
+        $width = $size->getWidth();
         $height = $size->getHeight();
         $palette = null !== $color ? $color->getPalette() : new RGB();
         $color = null !== $color ? $color : $palette->color('fff');
@@ -246,10 +243,12 @@ class Image extends AbstractImage
         $vips = $vips->bandjoin([
             $green,
             $blue,
-            $alpha
+            $alpha,
         ]);
+
         return $vips;
     }
+
     /**
      * {@inheritdoc}
      */
@@ -268,7 +267,7 @@ class Image extends AbstractImage
                 if ($this->vips->hasAlpha()) {
                     $this->vips = $this->vips->premultiply();
                 }
-                $this->vips = $this->vips->resize( $size->getWidth() / $this->vips->width, ['vscale' => $size->getHeight() / $this->vips->height]);
+                $this->vips = $this->vips->resize($size->getWidth() / $this->vips->width, ['vscale' => $size->getHeight() / $this->vips->height]);
                 if ($this->vips->hasAlpha()) {
                     $this->vips = $this->vips->unpremultiply();
                 }
@@ -276,6 +275,7 @@ class Image extends AbstractImage
         } catch (VipsException $e) {
             throw new RuntimeException('Resize operation failed', $e->getCode(), $e);
         }
+
         return $this;
     }
 
@@ -288,7 +288,6 @@ class Image extends AbstractImage
     {
         $color = $background ? $background : $this->palette->color('fff');
         try {
-
             switch ($angle) {
                 case 0:
                 case 360:
@@ -311,11 +310,11 @@ class Image extends AbstractImage
                     }
                     //needs upcoming vips 8.6
                     $this->vips = $this->vips->similarity(['angle' => $angle, 'background' => self::getColorArrayAlpha($color)]);
-
             }
         } catch (VipsException $e) {
-            throw new RuntimeException('Rotate operation failed. ' . $e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException('Rotate operation failed. '.$e->getMessage(), $e->getCode(), $e);
         }
+
         return $this;
     }
 
@@ -324,25 +323,23 @@ class Image extends AbstractImage
      *
      * @return ImageInterface
      */
-    public function save($path = null, array $options = array())
+    public function save($path = null, array $options = [])
     {
         $options = $this->applyImageOptions($this->vips, $options, $path);
         $this->prepareOutput($options);
         $format = $options['format'];
         if ($format == 'jpg' || $format == 'jpeg') {
             return $this->vips->jpegsave($path, ['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
-        }
-        else if ($format == 'png') {
+        } elseif ($format == 'png') {
             return $this->vips->pngsave($path, ['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
-        }
-        else if ($format == 'webp') {
+        } elseif ($format == 'webp') {
             return $this->vips->webpsave($path, ['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
-        }
-        else {
+        } else {
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
             //FIXME: make this better configurable
             $imagickine = new \Imagine\Imagick\Imagine();
             $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
+
             return $imagick->save($path, $options);
         }
 
@@ -354,7 +351,7 @@ class Image extends AbstractImage
      *
      * @return ImageInterface
      */
-    public function show($format, array $options = array())
+    public function show($format, array $options = [])
     {
         header('Content-type: '.$this->getMimeType($format));
         echo $this->get($format, $options);
@@ -365,7 +362,7 @@ class Image extends AbstractImage
     /**
      * {@inheritdoc}
      */
-    public function get($format, array $options = array())
+    public function get($format, array $options = [])
     {
         $options['format'] = $format;
         $this->prepareOutput($options);
@@ -373,18 +370,16 @@ class Image extends AbstractImage
 
         if ($format == 'jpg' || $format == 'jpeg') {
             return $this->vips->jpegsave_buffer(['strip' => $this->strip, 'Q' => $options['jpeg_quality'], 'interlace' => true]);
-        }
-        else if ($format == 'png') {
+        } elseif ($format == 'png') {
             return $this->vips->pngsave_buffer(['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
-        }
-        else if ($format == 'webp') {
+        } elseif ($format == 'webp') {
             return $this->vips->webpsave_buffer(['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
-        }
-        else {
+        } else {
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
             //FIXME: and maybe make that more customizable
             $imagickine = new \Imagine\Imagick\Imagine();
             $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
+
             return $imagick->get($format, $options);
         }
     }
@@ -396,12 +391,12 @@ class Image extends AbstractImage
     {
         //FIXME: implement in vips
 
-        static $supportedInterlaceSchemes = array(
-            ImageInterface::INTERLACE_NONE      => \Imagick::INTERLACE_NO,
-            ImageInterface::INTERLACE_LINE      => \Imagick::INTERLACE_LINE,
-            ImageInterface::INTERLACE_PLANE     => \Imagick::INTERLACE_PLANE,
+        static $supportedInterlaceSchemes = [
+            ImageInterface::INTERLACE_NONE => \Imagick::INTERLACE_NO,
+            ImageInterface::INTERLACE_LINE => \Imagick::INTERLACE_LINE,
+            ImageInterface::INTERLACE_PLANE => \Imagick::INTERLACE_PLANE,
             ImageInterface::INTERLACE_PARTITION => \Imagick::INTERLACE_PARTITION,
-        );
+        ];
 
         if (!array_key_exists($scheme, $supportedInterlaceSchemes)) {
             throw new InvalidArgumentException('Unsupported interlace type');
@@ -413,52 +408,12 @@ class Image extends AbstractImage
     }
 
     /**
-     * @param array  $options
-     * @param string $path
-     */
-    private function prepareOutput(array $options, $path = null)
-    {
-        if (isset($options['format'])) {
-           // $this->vips->format = $options['format'];
-            //$this->vips->setImageFormat($options['format']);
-        }
-        // FIXME: layer support
-        /*
-        if (isset($options['animated']) && true === $options['animated']) {
-            $format = isset($options['format']) ? $options['format'] : 'gif';
-            $delay = isset($options['animated.delay']) ? $options['animated.delay'] : null;
-            $loops = isset($options['animated.loops']) ? $options['animated.loops'] : 0;
-
-            $options['flatten'] = false;
-
-            $this->layers->animate($format, $delay, $loops);
-        } else {
-            $this->layers->merge();
-        }*/
-
-        // flatten only if image has multiple layers
-        // FIXME:: flatten
-        /*if ((!isset($options['flatten']) || $options['flatten'] === true) && count($this->layers) > 1) {
-            $this->flatten();
-        }*/
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function __toString()
-    {
-        return $this->get('png');
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function draw()
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
         return new Drawer($this->vips);
     }
 
@@ -468,8 +423,7 @@ class Image extends AbstractImage
     public function effects()
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
         return new Effects($this->vips);
     }
 
@@ -478,8 +432,9 @@ class Image extends AbstractImage
      */
     public function getSize()
     {
-        $width  = $this->vips->width;
+        $width = $this->vips->width;
         $height = $this->vips->height;
+
         return new Box($width, $height);
     }
 
@@ -491,7 +446,7 @@ class Image extends AbstractImage
     public function applyMask(ImageInterface $mask)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
     }
 
     /**
@@ -500,7 +455,7 @@ class Image extends AbstractImage
     public function mask()
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
     }
 
     /**
@@ -511,7 +466,7 @@ class Image extends AbstractImage
     public function fill(FillInterface $fill)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
     }
 
     /**
@@ -520,7 +475,7 @@ class Image extends AbstractImage
     public function histogram()
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
     }
 
     /**
@@ -528,14 +483,12 @@ class Image extends AbstractImage
      */
     public function getColorAt(PointInterface $point)
     {
-
         if (!$point->in($this->getSize())) {
             throw new RuntimeException(sprintf('Error getting color at point [%s,%s]. The point must be inside the image of size [%s,%s]', $point->getX(), $point->getY(), $this->getSize()->getWidth(), $this->getSize()->getHeight()));
         }
 
         try {
             $pixel = $this->vips->getpoint($point->getX(), $point->getY());
-
         } catch (VipsException $e) {
             throw new RuntimeException('Error while getting image pixel color', $e->getCode(), $e);
         }
@@ -544,15 +497,15 @@ class Image extends AbstractImage
     }
 
     /**
-     * Returns a color given a pixel, depending the Palette context
+     * Returns a color given a pixel, depending the Palette context.
      *
      * Note : this method is public for PHP 5.3 compatibility
      *
      * @param array $pixel
      *
-     * @return ColorInterface
-     *
      * @throws InvalidArgumentException In case a unknown color is requested
+     *
+     * @return ColorInterface
      */
     public function pixelToColor(array $pixel)
     {
@@ -567,6 +520,7 @@ class Image extends AbstractImage
         if ($this->palette() instanceof \Imagine\Image\Palette\Grayscale) {
             $alpha = array_pop($pixel) / 255 * 100;
             $g = (int) $pixel[0];
+
             return $this->palette()->color([$g, $g, $g], (int) $alpha);
         }
     }
@@ -593,7 +547,7 @@ class Image extends AbstractImage
 
         /* FIXME: implement palette support.. */
         return $this;
-   }
+    }
 
     /**
      * {@inheritdoc}
@@ -609,12 +563,93 @@ class Image extends AbstractImage
     public function profile(ProfileInterface $profile)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
+    }
 
+    public static function getColorArrayAlpha(ColorInterface $color): array
+    {
+        if ($color->getPalette() instanceof RGB) {
+            return [
+                $color->getValue(ColorInterface::COLOR_RED),
+                $color->getValue(ColorInterface::COLOR_GREEN),
+                $color->getValue(ColorInterface::COLOR_BLUE),
+                $color->getAlpha() / 100 * 255,
+            ];
+        }
+        if ($color->getPalette() instanceof Grayscale) {
+            return [
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getValue(ColorInterface::COLOR_GRAY),
+                $color->getAlpha() / 100 * 255,
+            ];
+        }
+    }
+
+    protected function extendImage(BoxInterface $box, PointInterface $start)
+    {
+        $color = new \Imagine\Image\Palette\Color\RGB(new RGB(), [255, 255, 255], 0);
+        if (!$this->vips->hasAlpha()) {
+            $this->vips = $this->vips->bandjoin([255]);
+        }
+        $new = self::generateImage($box, $color);
+        //$this->vips = $new;
+        $this->vips = $new->insert($this->vips, $start->getX(), $start->getY());
+
+        return $this;
+    }
+
+    protected function updatePalette()
+    {
+        $this->palette = Imagine::createPalette($this->vips);
+    }
+
+    protected static function getInterpretation(PaletteInterface $palette)
+    {
+        if ($palette instanceof RGB) {
+            return Interpretation::SRGB;
+        }
+        if ($palette instanceof Grayscale) {
+            return Interpretation::GREY16;
+        }
+        if ($palette instanceof CMYK) {
+            return Interpretation::CMYK;
+        }
     }
 
     /**
-     * Internal
+     * @param array  $options
+     * @param string $path
+     */
+    private function prepareOutput(array $options, $path = null)
+    {
+        if (isset($options['format'])) {
+            // $this->vips->format = $options['format'];
+            //$this->vips->setImageFormat($options['format']);
+        }
+        // FIXME: layer support
+        /*
+        if (isset($options['animated']) && true === $options['animated']) {
+            $format = isset($options['format']) ? $options['format'] : 'gif';
+            $delay = isset($options['animated.delay']) ? $options['animated.delay'] : null;
+            $loops = isset($options['animated.loops']) ? $options['animated.loops'] : 0;
+
+            $options['flatten'] = false;
+
+            $this->layers->animate($format, $delay, $loops);
+        } else {
+            $this->layers->merge();
+        }*/
+
+        // flatten only if image has multiple layers
+        // FIXME:: flatten
+        /*if ((!isset($options['flatten']) || $options['flatten'] === true) && count($this->layers) > 1) {
+            $this->flatten();
+        }*/
+    }
+
+    /**
+     * Internal.
      *
      * Flatten the image.
      */
@@ -628,7 +663,7 @@ class Image extends AbstractImage
     }
 
     /**
-     * Internal
+     * Internal.
      *
      * Applies options before save or output
      *
@@ -652,16 +687,15 @@ class Image extends AbstractImage
         $format = strtolower($format);
         $options['format'] = $format;
 
-        if (!isset($options['jpeg_quality']) && in_array($format, array('jpeg', 'jpg', 'pjpeg'))) {
+        if (!isset($options['jpeg_quality']) && in_array($format, ['jpeg', 'jpg', 'pjpeg'], true)) {
             $options['jpeg_quality'] = 92;
         }
-        if (!isset($options['webp_quality']) && in_array($format, array('webp'))) {
+        if (!isset($options['webp_quality']) && in_array($format, ['webp'], true)) {
             $options['webp_quality'] = 80; // FIXME: correct value?
         }
-        if (!isset($options['webp_lossless']) && in_array($format, array('webp'))) {
+        if (!isset($options['webp_lossless']) && in_array($format, ['webp'], true)) {
             $options['webp_lossless'] = false;
         }
-
 
         if ($format === 'png') {
             if (!isset($options['png_compression_level'])) {
@@ -671,9 +705,8 @@ class Image extends AbstractImage
             if (!isset($options['png_compression_filter'])) {
                 $options['png_compression_filter'] = 5;
             }
-
         }
-        /** FIXME: do we need this?
+        /* FIXME: do we need this?
         if (isset($options['resolution-units']) && isset($options['resolution-x']) && isset($options['resolution-y'])) {
             if ($options['resolution-units'] == ImageInterface::RESOLUTION_PIXELSPERCENTIMETER) {
                 $vips->setImageUnits(\Imagick::RESOLUTION_PIXELSPERCENTIMETER);
@@ -695,35 +728,31 @@ class Image extends AbstractImage
         return $options;
     }
 
-    protected function updatePalette() {
-        $this->palette = Imagine::createPalette($this->vips);
-    }
-
     /**
-     * Internal
+     * Internal.
      *
      * Get the mime type based on format.
      *
      * @param string $format
      *
-     * @return string mime-type
-     *
      * @throws RuntimeException
+     *
+     * @return string mime-type
      */
     private function getMimeType($format)
     {
-        static $mimeTypes = array(
+        static $mimeTypes = [
             'jpeg' => 'image/jpeg',
-            'jpg'  => 'image/jpeg',
-            'gif'  => 'image/gif',
-            'png'  => 'image/png',
+            'jpg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'png' => 'image/png',
             'wbmp' => 'image/vnd.wap.wbmp',
-            'xbm'  => 'image/xbm',
+            'xbm' => 'image/xbm',
             'webp' => 'image/webp',
-        );
+        ];
 
         if (!isset($mimeTypes[$format])) {
-            throw new RuntimeException(sprintf('Unsupported format given. Only %s are supported, %s given', implode(", ", array_keys($mimeTypes)), $format));
+            throw new RuntimeException(sprintf('Unsupported format given. Only %s are supported, %s given', implode(', ', array_keys($mimeTypes)), $format));
         }
 
         return $mimeTypes[$format];
@@ -739,14 +768,14 @@ class Image extends AbstractImage
     private function setColorspace(PaletteInterface $palette)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
-  }
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
+    }
 
     /**
      * Older imagemagick versions does not support colorspace conversions.
      * Let's detect if it is supported.
      *
-     * @return Boolean
+     * @return bool
      */
     private function detectColorspaceConversionSupport()
     {
@@ -762,54 +791,21 @@ class Image extends AbstractImage
      *
      * @param string $filter
      *
-     * @return string
+     * @throws InvalidArgumentException if the filter is unsupported
      *
-     * @throws InvalidArgumentException If the filter is unsupported.
+     * @return string
      */
     private function getFilter($filter = ImageInterface::FILTER_UNDEFINED)
     {
         //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
     }
 
-    protected static function getInterpretation(PaletteInterface $palette) {
-        if ($palette instanceof RGB) {
-            return Interpretation::SRGB;
-        }
-        if ($palette instanceof Grayscale) {
-            return Interpretation::GREY16;
-        }
-        if ($palette instanceof CMYK) {
-            return Interpretation::CMYK;
-        }
-    }
-
-
-    private function getColorArray(ColorInterface $color): array {
+    private function getColorArray(ColorInterface $color): array
+    {
         return [$color->getValue(ColorInterface::COLOR_RED),
             $color->getValue(ColorInterface::COLOR_GREEN),
-            $color->getValue(ColorInterface::COLOR_BLUE)
+            $color->getValue(ColorInterface::COLOR_BLUE),
         ];
     }
-
-    public static function getColorArrayAlpha(ColorInterface $color): array {
-        if ($color->getPalette() instanceof RGB) {
-            return [
-                $color->getValue(ColorInterface::COLOR_RED),
-                $color->getValue(ColorInterface::COLOR_GREEN),
-                $color->getValue(ColorInterface::COLOR_BLUE),
-                $color->getAlpha() / 100 * 255
-
-            ];
-        }
-        if ($color->getPalette() instanceof Grayscale) {
-            return [
-                $color->getValue(ColorInterface::COLOR_GRAY),
-                $color->getValue(ColorInterface::COLOR_GRAY),
-                $color->getValue(ColorInterface::COLOR_GRAY),
-                $color->getAlpha() / 100 * 255
-            ];
-        }
-    }
-
 }

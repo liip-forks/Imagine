@@ -17,7 +17,7 @@ use Imagine\Image\Palette\Color\ColorInterface;
 use Jcupitt\Vips\Image as VipsImage;
 
 /**
- * Font implementation using the Imagick PHP extension
+ * Font implementation using the Imagick PHP extension.
  */
 final class Font extends AbstractFont
 {
@@ -29,12 +29,11 @@ final class Font extends AbstractFont
     /**
      * @param VipsImage      $vips
      * @param string         $file
-     * @param integer        $size
+     * @param int            $size
      * @param ColorInterface $color
      */
     public function __construct(VipsImage $vips = null, $file, $size, ColorInterface $color)
     {
-
         parent::__construct($file, $size, $color);
     }
 
