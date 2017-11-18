@@ -21,6 +21,7 @@ use Imagine\Image\Palette\CMYK;
 use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Image\Palette\Grayscale;
 use Imagine\Image\Palette\RGB;
+use Jcupitt\Vips\Exception;
 use Jcupitt\Vips\Image as VipsImage;
 use Jcupitt\Vips\Interpretation;
 
@@ -48,6 +49,7 @@ class Imagine extends AbstractImagine
 
         try {
             $vips = VipsImage::newFromFile($path);
+            $this->importIccProfile($vips);
 
             return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readFile($path));
         } catch (\Exception $e) {
@@ -72,6 +74,7 @@ class Imagine extends AbstractImagine
     {
         try {
             $vips = VipsImage::newFromBuffer($string);
+            $this->importIccProfile($vips);
 
             return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readData($string));
         } catch (\Exception $e) {
@@ -124,6 +127,18 @@ class Imagine extends AbstractImagine
                 return new Grayscale();
             default:
                 throw new NotSupportedException('Only RGB and CMYK colorspace are currently supported');
+        }
+    }
+
+    /**
+     * @param $vips
+     */
+    protected function importIccProfile($vips)
+    {
+        try {
+            $this->vips = $vips->icc_import(['embedded' => true]);
+        } catch (Exception $e) {
+            //no problem if no icc is embedded
         }
     }
 }
