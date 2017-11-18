@@ -11,13 +11,8 @@
 
 namespace Imagine\Vips;
 
-use Imagine\Exception\InvalidArgumentException;
-use Imagine\Exception\OutOfBoundsException;
 use Imagine\Exception\RuntimeException;
 use Imagine\Image\AbstractLayers;
-use Imagine\Image\Metadata\MetadataBag;
-use Imagine\Image\Palette\PaletteInterface;
-use Jcupitt\Vips\Exception;
 
 class Layers extends AbstractLayers
 {
@@ -25,26 +20,15 @@ class Layers extends AbstractLayers
      * @var Image
      */
     private $image;
-    /**
-     * @var \Jcupitt\Vips\Image
-     */
-    private $resource;
+
     /**
      * @var int
      */
     private $offset = 0;
-    /**
-     * @var array
-     */
-    private $layers = [];
 
-    private $palette;
-
-    public function __construct(Image $image, PaletteInterface $palette, \Jcupitt\Vips\Image $resource)
+    public function __construct(Image $image)
     {
         $this->image = $image;
-        $this->resource = $resource;
-        $this->palette = $palette;
     }
 
     /**
@@ -52,14 +36,6 @@ class Layers extends AbstractLayers
      */
     public function merge()
     {
-        foreach ($this->layers as $offset => $image) {
-            try {
-                $this->resource->setIteratorIndex($offset);
-                $this->resource->setImage($image->getImagick());
-            } catch (\ImagickException $e) {
-                throw new RuntimeException('Failed to substitute layer', $e->getCode(), $e);
-            }
-        }
     }
 
     /**
@@ -67,35 +43,6 @@ class Layers extends AbstractLayers
      */
     public function animate($format, $delay, $loops)
     {
-        if ('gif' !== strtolower($format)) {
-            throw new InvalidArgumentException('Animated picture is currently only supported on gif');
-        }
-
-        if (!is_int($loops) || $loops < 0) {
-            throw new InvalidArgumentException('Loops must be a positive integer.');
-        }
-
-        if (null !== $delay && (!is_int($delay) || $delay < 0)) {
-            throw new InvalidArgumentException('Delay must be either null or a positive integer.');
-        }
-
-        try {
-            foreach ($this as $offset => $layer) {
-                $this->resource->setIteratorIndex($offset);
-                $this->resource->setFormat($format);
-
-                if (null !== $delay) {
-                    $layer->getImagick()->setImageDelay($delay / 10);
-                    $layer->getImagick()->setImageTicksPerSecond(100);
-                }
-                $layer->getImagick()->setImageIterations($loops);
-
-                $this->resource->setImage($layer->getImagick());
-            }
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Failed to animate layers', $e->getCode(), $e);
-        }
-
         return $this;
     }
 
@@ -104,21 +51,6 @@ class Layers extends AbstractLayers
      */
     public function coalesce()
     {
-        try {
-            $coalescedResource = $this->resource->coalesceImages();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Failed to coalesce layers', $e->getCode(), $e);
-        }
-
-        $count = $coalescedResource->getNumberImages();
-        for ($offset = 0; $offset < $count; ++$offset) {
-            try {
-                $coalescedResource->setIteratorIndex($offset);
-                $this->layers[$offset] = new Image($coalescedResource->getImage(), $this->palette, new MetadataBag());
-            } catch (\ImagickException $e) {
-                throw new RuntimeException('Failed to retrieve layer', $e->getCode(), $e);
-            }
-        }
     }
 
     /**
@@ -167,7 +99,7 @@ class Layers extends AbstractLayers
     public function count()
     {
         try {
-            return $this->resource;
+            return 1;
         } catch (\ImagickException $e) {
             throw new RuntimeException('Failed to count the number of layers', $e->getCode(), $e);
         }
@@ -194,39 +126,6 @@ class Layers extends AbstractLayers
      */
     public function offsetSet($offset, $image)
     {
-        if (!$image instanceof Image) {
-            throw new InvalidArgumentException('Only an Imagick Image can be used as layer');
-        }
-
-        if (null === $offset) {
-            $offset = count($this) - 1;
-        } else {
-            if (!is_int($offset)) {
-                throw new InvalidArgumentException('Invalid offset for layer, it must be an integer');
-            }
-
-            if (count($this) < $offset || 0 > $offset) {
-                throw new OutOfBoundsException(sprintf('Invalid offset for layer, it must be a value between 0 and %d, %d given', count($this), $offset));
-            }
-
-            if (isset($this[$offset])) {
-                unset($this[$offset]);
-                $offset = $offset - 1;
-            }
-        }
-
-        $frame = $image->getImagick();
-
-        try {
-            if (count($this) > 0) {
-                $this->resource->setIteratorIndex($offset);
-            }
-            $this->resource->addImage($frame);
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Unable to set the layer', $e->getCode(), $e);
-        }
-
-        $this->layers = [];
     }
 
     /**
@@ -234,18 +133,6 @@ class Layers extends AbstractLayers
      */
     public function offsetUnset($offset)
     {
-        try {
-            $this->extractAt($offset);
-        } catch (RuntimeException $e) {
-            return;
-        }
-
-        try {
-            $this->resource->setIteratorIndex($offset);
-            $this->resource->removeImage();
-        } catch (\ImagickException $e) {
-            throw new RuntimeException('Unable to remove layer', $e->getCode(), $e);
-        }
     }
 
     /**
@@ -259,14 +146,10 @@ class Layers extends AbstractLayers
      */
     private function extractAt($offset)
     {
-        if (!isset($this->layers[$offset])) {
-            try {
-                $this->layers[$offset] = new Image($this->resource->getImage(), $this->palette, new MetadataBag());
-            } catch (Exception $e) {
-                throw new RuntimeException(sprintf('Failed to extract layer %d', $offset), $e->getCode(), $e);
-            }
+        if ($offset > 0) {
+            throw new RuntimeException("The vips adapter doesn't support layered images. Only the first one is available.");
         }
 
-        return $this->layers[$offset];
+        return $this->image;
     }
 }

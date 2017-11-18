@@ -75,7 +75,7 @@ class Imagine extends AbstractImagine
     {
         try {
             $loadOptions = $this->getLoadOptions(VipsImage::findLoadBuffer($string));
-            $vips = VipsImage::newFromBuffer($string,'', $loadOptions);
+            $vips = VipsImage::newFromBuffer($string, '', $loadOptions);
             $vips = $this->importIccProfile($vips);
 
             return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readData($string));
@@ -135,6 +135,8 @@ class Imagine extends AbstractImagine
 
     /**
      * @param $vips
+     *
+     * @return \Jcupitt\Vips\Image
      */
     protected function importIccProfile($vips)
     {
@@ -150,11 +152,12 @@ class Imagine extends AbstractImagine
     protected function getLoadOptions($loader)
     {
         $options = [];
-        switch($loader) {
-            case "VipsForeignLoadJpegFile":
-            case "VipsForeignLoadJpegBuffer":
+        switch ($loader) {
+            case 'VipsForeignLoadJpegFile':
+            case 'VipsForeignLoadJpegBuffer':
                 $options['autorotate'] = true;
         }
+
         return $options;
     }
 }

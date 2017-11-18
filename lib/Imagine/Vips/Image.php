@@ -21,6 +21,7 @@ use Imagine\Image\BoxInterface;
 use Imagine\Image\Fill\FillInterface;
 use Imagine\Image\Fill\Gradient\Horizontal;
 use Imagine\Image\ImageInterface;
+use Imagine\Image\ImagineInterface;
 use Imagine\Image\Metadata\MetadataBag;
 use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Image\Palette\PaletteInterface;
@@ -55,11 +56,6 @@ class Image extends AbstractImage
 
     private $strip = false;
 
-    /**
-     * @var bool
-     */
-    private static $supportsColorspaceConversion;
-
     private static $colorspaceMapping = [
         PaletteInterface::PALETTE_CMYK => \Imagick::COLORSPACE_CMYK,
         PaletteInterface::PALETTE_RGB => \Imagick::COLORSPACE_RGB,
@@ -78,14 +74,8 @@ class Image extends AbstractImage
         $this->vips = $vips;
 
         $this->metadata = $metadata;
-        $this->detectColorspaceConversionSupport();
-        if (self::$supportsColorspaceConversion) {
-            //FIXME:: support this..
-            $this->setColorspace($palette);
-        }
         $this->palette = $palette;
-        // FIXME:: layers..
-        //$this->layers = new Layers($this, $this->palette, $this->vips);
+        $this->layers = new Layers($this);
     }
 
     /**
@@ -211,7 +201,6 @@ class Image extends AbstractImage
      */
     public function paste(ImageInterface $image, PointInterface $start)
     {
-        //FIXME: implement in vips
         /** @var VipsImage $inVips */
         $inVips = $image->getVips();
 
@@ -261,22 +250,12 @@ class Image extends AbstractImage
     public function resize(BoxInterface $size, $filter = ImageInterface::FILTER_UNDEFINED)
     {
         try {
-            //TODO: check if this actually works and implement layers
-            if (count($this->vips) > 1) {
-                $this->vips = $this->vips->coalesceImages();
-                foreach ($this->vips as $frame) {
-                    $frame->resizeImage($size->getWidth(), $size->getHeight(), $this->getFilter($filter), 1);
-                }
-                $this->vips = $this->vips->deconstructImages();
-            } else {
-                //FIXME: we only need to do this, if it has visible alpha, not just an alpha channel
-                if ($this->vips->hasAlpha()) {
-                    $this->vips = $this->vips->premultiply();
-                }
-                $this->vips = $this->vips->resize($size->getWidth() / $this->vips->width, ['vscale' => $size->getHeight() / $this->vips->height]);
-                if ($this->vips->hasAlpha()) {
-                    $this->vips = $this->vips->unpremultiply();
-                }
+            if ($this->vips->hasAlpha()) {
+                $this->vips = $this->vips->premultiply();
+            }
+            $this->vips = $this->vips->resize($size->getWidth() / $this->vips->width, ['vscale' => $size->getHeight() / $this->vips->height]);
+            if ($this->vips->hasAlpha()) {
+                $this->vips = $this->vips->unpremultiply();
             }
         } catch (VipsException $e) {
             throw new RuntimeException('Resize operation failed', $e->getCode(), $e);
@@ -341,13 +320,8 @@ class Image extends AbstractImage
         } elseif ($format == 'webp') {
             return $this->vips->webpsave($path, ['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
         }
-            //fallback to imagemagick, not sure pngsave is the best and fastest solution
-            //FIXME: make this better configurable
-            $imagickine = new \Imagine\Imagick\Imagine();
-        $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
-
-        return $imagick->save($path, $options);
-        return $this;
+        //fallback to imagemagick or gd
+        return $this->getFallbackImagineImage()->save($path, $options);
     }
 
     /**
@@ -379,12 +353,15 @@ class Image extends AbstractImage
         } elseif ($format == 'webp') {
             return $this->vips->webpsave_buffer(['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
         }
-            //fallback to imagemagick, not sure pngsave is the best and fastest solution
-            //FIXME: and maybe make that more customizable
-            $imagickine = new \Imagine\Imagick\Imagine();
-        $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
 
-        return $imagick->get($format, $options);
+        //FIXME: and maybe make that more customizable
+        if (class_exists('Imagick')) {
+            $imagine = new \Imagine\Imagick\Imagine();
+        } else {
+            $imagine = new \Imagine\GD\Imagine();
+        }
+        //fallback to imagemagick or gd
+        return $this->getFallbackImagineImage()->get($format, $options);
     }
 
     /**
@@ -393,21 +370,7 @@ class Image extends AbstractImage
     public function interlace($scheme)
     {
         //FIXME: implement in vips
-
-        static $supportedInterlaceSchemes = [
-            ImageInterface::INTERLACE_NONE => \Imagick::INTERLACE_NO,
-            ImageInterface::INTERLACE_LINE => \Imagick::INTERLACE_LINE,
-            ImageInterface::INTERLACE_PLANE => \Imagick::INTERLACE_PLANE,
-            ImageInterface::INTERLACE_PARTITION => \Imagick::INTERLACE_PARTITION,
-        ];
-
-        if (!array_key_exists($scheme, $supportedInterlaceSchemes)) {
-            throw new InvalidArgumentException('Unsupported interlace type');
-        }
-//FIXME: implement...
-//        $this->vips->setInterlaceScheme($supportedInterlaceSchemes[$scheme]);
-
-        return $this;
+        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
     }
 
     /**
@@ -563,8 +526,7 @@ class Image extends AbstractImage
      */
     public function layers()
     {
-        //FIXME: implement in vips
-      //  throw new \RuntimeException(__METHOD__ . " not implemented yet in the vips adapter.");
+        //FIXME: implement actual layers, not just the first layer in vips
 
         return $this->layers;
     }
@@ -651,6 +613,21 @@ class Image extends AbstractImage
     }
 
     /**
+     * @return ImagineInterface
+     */
+    protected function getFallbackImagineImage()
+    {
+        //FIXME: make this better configurable...
+        if (class_exists('Imagick')) {
+            $imagine = new \Imagine\Imagick\Imagine();
+        } else {
+            $imagine = new \Imagine\GD\Imagine();
+        }
+
+        return $imagine->load($this->vips->pngsave_buffer(['interlace' => false]));
+    }
+
+    /**
      * @param array  $options
      * @param string $path
      */
@@ -660,25 +637,7 @@ class Image extends AbstractImage
             // $this->vips->format = $options['format'];
             //$this->vips->setImageFormat($options['format']);
         }
-        // FIXME: layer support
-        /*
-        if (isset($options['animated']) && true === $options['animated']) {
-            $format = isset($options['format']) ? $options['format'] : 'gif';
-            $delay = isset($options['animated.delay']) ? $options['animated.delay'] : null;
-            $loops = isset($options['animated.loops']) ? $options['animated.loops'] : 0;
-
-            $options['flatten'] = false;
-
-            $this->layers->animate($format, $delay, $loops);
-        } else {
-            $this->layers->merge();
-        }*/
-
-        // flatten only if image has multiple layers
-        // FIXME:: flatten
-        /*if ((!isset($options['flatten']) || $options['flatten'] === true) && count($this->layers) > 1) {
-            $this->flatten();
-        }*/
+        // FIXME: layer support, merge them if $options['animated'] != true or $options['flatten'] == true
     }
 
     /**
@@ -799,36 +758,6 @@ class Image extends AbstractImage
      * @throws InvalidArgumentException
      */
     private function setColorspace(PaletteInterface $palette)
-    {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
-    }
-
-    /**
-     * Older imagemagick versions does not support colorspace conversions.
-     * Let's detect if it is supported.
-     *
-     * @return bool
-     */
-    private function detectColorspaceConversionSupport()
-    {
-        if (null !== self::$supportsColorspaceConversion) {
-            return self::$supportsColorspaceConversion;
-        }
-        //FIXME:: not tested
-        return self::$supportsColorspaceConversion = method_exists('Jcupitt\Vips\Image', 'colourspace');
-    }
-
-    /**
-     * Returns the filter if it's supported.
-     *
-     * @param string $filter
-     *
-     * @throws InvalidArgumentException if the filter is unsupported
-     *
-     * @return string
-     */
-    private function getFilter($filter = ImageInterface::FILTER_UNDEFINED)
     {
         //FIXME: implement in vips
         throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
