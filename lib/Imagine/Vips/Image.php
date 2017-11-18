@@ -121,28 +121,28 @@ class Image extends AbstractImage
      */
     public function crop(PointInterface $start, BoxInterface $size)
     {
-        //FIXME: this gives an error when $size is biger than image, does not with imagick
-        if (!$start->in($this->getSize())) {
+        $thisBox = $this->getSize();
+        if (!$start->in($thisBox)) {
             throw new OutOfBoundsException('Crop coordinates must start at minimum 0, 0 position from top left corner, crop height and width must be positive integers and must not exceed the current image borders');
         }
+        // behave the same as imagick and gd, if box is too big, resize to max possible value, so that it
+        //  stops at right and bottom border
+        if (!$thisBox->contains($size, $start)) {
+            if ($start->getX() + $size->getWidth() > $thisBox->getWidth()) {
+                $size = new Box($thisBox->getWidth() - $start->getX(), $size->getHeight());
+            }
+            if ($start->getY() + $size->getHeight() > $thisBox->getHeight()) {
+                $size = new Box($size->getWidth(), $thisBox->getHeight() - $start->getY());
+            }
+        }
         try {
-            //FIXME: Layers support
-            /*if ($this->layers()->count() > 1) {
-                // Crop each layer separately
-                $this->vips = $this->vips->coalesceImages();
-                foreach ($this->vips as $frame) {
-                    $frame->cropImage($size->getWidth(), $size->getHeight(), $start->getX(), $start->getY());
-                    // Reset canvas for gif format
-                    $frame->setImagePage(0, 0, 0, 0);
-                }
-                $this->vips = $this->vips->deconstructImages();
-            } else {*/
-                $this->vips = $this->vips->crop($start->getX(), $start->getY(), $size->getWidth(), $size->getHeight());
-                //$this->vips->cropImage(, , , );
-                // Reset canvas for gif format
-            // FIXME?
-                //$this->vips->setImagePage(0, 0, 0, 0);
-            //}
+            /*
+             * FIXME: Layers support
+             * if ($this->layers()->count() > 1) {
+             *   // Crop each layer separately
+             * } else {
+             */
+            $this->vips = $this->vips->crop($start->getX(), $start->getY(), $size->getWidth(), $size->getHeight());
         } catch (VipsException $e) {
             throw new RuntimeException('Crop operation failed', $e->getCode(), $e);
         }
