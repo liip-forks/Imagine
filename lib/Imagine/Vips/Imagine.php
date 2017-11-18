@@ -120,6 +120,7 @@ class Imagine extends AbstractImagine
             case Interpretation::CMYK:
                 return new CMYK();
             case Interpretation::GREY16:
+            case Interpretation::B_W:
                 return new Grayscale();
             default:
                 throw new NotSupportedException('Only RGB and CMYK colorspace are currently supported');

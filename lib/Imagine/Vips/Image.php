@@ -106,6 +106,12 @@ class Image extends AbstractImage
         return $this->vips;
     }
 
+    public function setVips($vips)
+    {
+        $this->vips = $vips;
+        $this->updatePalette();
+    }
+
     /**
      * {@inheritdoc}
      *
@@ -334,15 +340,13 @@ class Image extends AbstractImage
             return $this->vips->pngsave($path, ['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
         } elseif ($format == 'webp') {
             return $this->vips->webpsave($path, ['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
-        } else {
+        }
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
             //FIXME: make this better configurable
             $imagickine = new \Imagine\Imagick\Imagine();
-            $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
+        $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
 
-            return $imagick->save($path, $options);
-        }
-
+        return $imagick->save($path, $options);
         return $this;
     }
 
@@ -374,14 +378,13 @@ class Image extends AbstractImage
             return $this->vips->pngsave_buffer(['strip' => $this->strip, 'compression' => $options['png_compression_level']]);
         } elseif ($format == 'webp') {
             return $this->vips->webpsave_buffer(['strip' => $this->strip, 'Q' => $options['webp_quality'], 'lossless' => $options['webp_lossless']]);
-        } else {
+        }
             //fallback to imagemagick, not sure pngsave is the best and fastest solution
             //FIXME: and maybe make that more customizable
             $imagickine = new \Imagine\Imagick\Imagine();
-            $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
+        $imagick = $imagickine->load($this->vips->pngsave_buffer(['interlace' => false]));
 
-            return $imagick->get($format, $options);
-        }
+        return $imagick->get($format, $options);
     }
 
     /**
@@ -422,9 +425,7 @@ class Image extends AbstractImage
      */
     public function effects()
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
-        return new Effects($this->vips);
+        return new Effects($this);
     }
 
     /**
