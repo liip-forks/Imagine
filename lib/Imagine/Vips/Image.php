@@ -446,8 +446,29 @@ class Image extends AbstractImage
      */
     public function applyMask(ImageInterface $mask)
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
+        if (!$mask instanceof self) {
+            throw new InvalidArgumentException('Can only apply instances of Imagine\Imagick\Image as masks');
+        }
+
+        $size = $this->getSize();
+        $maskSize = $mask->getSize();
+
+        if ($size != $maskSize) {
+            throw new InvalidArgumentException(sprintf('The given mask doesn\'t match current image\'s size, Current mask\'s dimensions are %s, while image\'s dimensions are %s', $maskSize, $size));
+        }
+
+        $mask = $mask->getVips()->colourspace(Interpretation::B_W)->extract_band(0);
+        //remove alpha
+        if ($this->vips->hasAlpha()) {
+            $new = $this->vips->extract_band(0, ['n' => $this->vips->bands - 1]);
+        } else {
+            $new = $this->vips->copy();
+        }
+        $new = $new->bandjoin($mask);
+        $newImage = clone $this;
+        $newImage->setVips($new);
+
+        return $newImage;
     }
 
     /**
@@ -455,8 +476,19 @@ class Image extends AbstractImage
      */
     public function mask()
     {
-        //FIXME: implement in vips
-        throw new \RuntimeException(__METHOD__.' not implemented yet in the vips adapter.');
+        /** @var \Jcupitt\Vips\Image $lch */
+        $lch = $this->vips->colourspace(Interpretation::LCH);
+        $multiply = [1, 0, 1];
+        if ($lch->hasAlpha()) {
+            $multiply[] = 1;
+        }
+        $lch = $lch->multiply($multiply);
+        $lch = $lch->colourspace(Interpretation::B_W);
+        //$lch = $lch->extract_band(0);
+        $newImage = clone $this;
+        $newImage->setVips($lch);
+
+        return $newImage;
     }
 
     /**
