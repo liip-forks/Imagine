@@ -49,7 +49,7 @@ class Imagine extends AbstractImagine
 
         try {
             $vips = VipsImage::newFromFile($path);
-            $this->importIccProfile($vips);
+            $vips = $this->importIccProfile($vips);
 
             return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readFile($path));
         } catch (\Exception $e) {
@@ -74,7 +74,7 @@ class Imagine extends AbstractImagine
     {
         try {
             $vips = VipsImage::newFromBuffer($string);
-            $this->importIccProfile($vips);
+            $vips = $this->importIccProfile($vips);
 
             return new Image($vips, self::createPalette($vips), $this->getMetadataReader()->readData($string));
         } catch (\Exception $e) {
@@ -121,12 +121,13 @@ class Imagine extends AbstractImagine
             case Interpretation::SRGB:
                 return new RGB();
             case Interpretation::CMYK:
+            case Interpretation::LAB:
                 return new CMYK();
             case Interpretation::GREY16:
             case Interpretation::B_W:
                 return new Grayscale();
             default:
-                throw new NotSupportedException('Only RGB and CMYK colorspace are currently supported');
+                throw new NotSupportedException('Only RGB, CMYK and Grayscale colorspace are currently supported');
         }
     }
 
@@ -136,9 +137,11 @@ class Imagine extends AbstractImagine
     protected function importIccProfile($vips)
     {
         try {
-            $this->vips = $vips->icc_import(['embedded' => true]);
+            return $vips->icc_import(['embedded' => true]);
         } catch (Exception $e) {
             //no problem if no icc is embedded
         }
+
+        return $vips;
     }
 }
