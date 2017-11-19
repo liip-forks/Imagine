@@ -26,3 +26,9 @@ Adds webp support to Imagine
 * Merge Request: https://github.com/avalanche123/Imagine/pull/504
 * Upstream Status: Missing support for gmagick?
 
+## Remove finals in imagick class
+
+Remove some finals in imagick classes to make them extensible
+
+* Branch: https://github.com/liip-forks/Imagine/tree/remove-finals-from-imagick
+* Upstream Status: Won't be merged.
