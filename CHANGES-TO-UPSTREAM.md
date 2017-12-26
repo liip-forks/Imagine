@@ -32,3 +32,9 @@ Remove some finals in imagick classes to make them extensible
 
 * Branch: https://github.com/liip-forks/Imagine/tree/remove-finals-from-imagick
 * Upstream Status: Won't be merged.
+
+## Add sGray to supported colorspaces
+
+* This seems to be introduced/changed in ImageMagick 7.0.7-16
+* Branch: https://github.com/liip-forks/Imagine/tree/sgray_colorspace
+* Upstream Status: Not submitted yet
