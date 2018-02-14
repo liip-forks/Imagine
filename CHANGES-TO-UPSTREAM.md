@@ -38,3 +38,9 @@ Remove some finals in imagick classes to make them extensible
 * This seems to be introduced/changed in ImageMagick 7.0.7-16
 * Branch: https://github.com/liip-forks/Imagine/tree/sgray_colorspace
 * Upstream Status: Not submitted yet
+
+## Allow to define imagick specific options
+
+* Allow to define options for imagick with the key 'imagickOptions', which then are applied with $this->imagick->setOption($key, $value);  
+* Branch: https://github.com/liip-forks/Imagine/tree/imagickOptions
+* Upstream Status: Not submitted yet
