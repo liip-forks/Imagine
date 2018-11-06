@@ -813,8 +813,16 @@ final class Image extends AbstractImage
                     $compression = isset($options['png_compression_level']) ? $options['png_compression_level'] * 10 : 70;
                     // second digit: compression filter (default: 5)
                     $compression += isset($options['png_compression_filter']) ? $options['png_compression_filter'] : 5;
-                    $image->setimagecompressionquality($compression);
-                    $image->setcompressionquality($compression);
+                    
+                    $v = \Imagick::getVersion();
+                    preg_match('/ImageMagick ([0-9]+\.[0-9]+\.[0-9]+)/', $v['versionString'], $v);
+                    if (version_compare($v[1], '6.8.7') < 0 ) {
+                        //Use this for ImageMagick releases before 6.8.7-5
+                        $image->setImageCompressionQuality($compression);
+                    } else {
+                        //Use this for ImageMagick releases after 6.8.7-5
+                        $image->setCompressionQuality($compression);
+                    }
                 }
                 break;
             case 'webp':
