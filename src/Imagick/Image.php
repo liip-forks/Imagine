@@ -398,6 +398,8 @@ final class Image extends AbstractImage
     {
         if (isset($options['format'])) {
             $this->imagick->setImageFormat($options['format']);
+            $this->imagick->setFormat($options['format']);
+
         }
 
         if (isset($options['animated']) && true === $options['animated']) {
