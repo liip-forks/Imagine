@@ -970,6 +970,7 @@ abstract class AbstractImageTest extends ImagineTestCase
         return array(
             array('jpg', array('jpeg_quality' => 0), array('jpeg_quality' => 100)),
             array('png', array('png_compression_level' => 9), array('png_compression_level' => 0)),
+            array('webp', array('webp_quality' => 0), array('webp_quality' => 100)),
         );
     }
 
@@ -988,6 +989,14 @@ abstract class AbstractImageTest extends ImagineTestCase
         $image->copy()->save($filenameSmall, array('format' => $format) + $smallSizeOptions);
         $image->copy()->save($filenameBig, array('format' => $format) + $bigSizeOptions);
         $this->assertLessThan(filesize($filenameBig), filesize($filenameSmall));
+    }
+
+    /**
+     * @expectedException \Imagine\Exception\RuntimeException
+     */
+    public function testShouldFailOpeningAnInvalidImageFile()
+    {
+        $this->getImagine()->open(__FILE__);
     }
 
     abstract protected function getImageResolution(ImageInterface $image);
