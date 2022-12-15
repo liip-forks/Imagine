@@ -432,6 +432,11 @@ final class Image extends AbstractImage implements InfoProvider
         }
         $this->imagick = $this->applyImageOptions($this->imagick, $options, $path);
 
+        if (isset($options['imagickOptions']) && is_array($options['imagickOptions'])) {
+            foreach ($options['imagickOptions'] as $key => $value) {
+                $this->imagick->setOption($key, $value);
+            }
+        }
         // flatten only if image has multiple layers
         if ((!isset($options['flatten']) || $options['flatten'] === true) && $this->layers()->count() > 1) {
             $this->flatten();
@@ -439,6 +444,7 @@ final class Image extends AbstractImage implements InfoProvider
 
         if (isset($options['format'])) {
             $this->imagick->setImageFormat($options['format']);
+            $this->imagick->setFormat($options['format']);
         }
     }
 
