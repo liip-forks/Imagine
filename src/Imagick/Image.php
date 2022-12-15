@@ -823,10 +823,10 @@ class Image extends AbstractImage implements InfoProvider
                     $compression = isset($options['png_compression_level']) ? $options['png_compression_level'] * 10 : 70;
                     // second digit: compression filter (default: 5)
                     $compression += isset($options['png_compression_filter']) ? $options['png_compression_filter'] : 5;
-                    
+
                     $v = \Imagick::getVersion();
                     preg_match('/ImageMagick ([0-9]+\.[0-9]+\.[0-9]+)/', $v['versionString'], $v);
-                    if (version_compare($v[1], '6.8.7') < 0 ) {
+                    if (version_compare($v[1], '6.8.7') < 0) {
                         //Use this for ImageMagick releases before 6.8.7-5
                         $image->setImageCompressionQuality($compression);
                     } else {
