@@ -34,7 +34,7 @@ use Imagine\Utils\ErrorHandling;
 /**
  * Image implementation using the Imagick PHP extension.
  */
-final class Image extends AbstractImage implements InfoProvider
+class Image extends AbstractImage implements InfoProvider
 {
     /**
      * @var \Imagick
