@@ -196,6 +196,7 @@ class Imagine extends AbstractImagine implements InfoProvider
             case \Imagick::COLORSPACE_CMYK:
                 return new CMYK();
             case \Imagick::COLORSPACE_GRAY:
+            case 33; #\Imagick::COLORSPACE_SGRAY:
                 return new Grayscale();
             case \Imagick::COLORSPACE_YCBCR:
                 static::getDriverInfo()->requireFeature(DriverInfo::FEATURE_COLORSPACECONVERSION);
