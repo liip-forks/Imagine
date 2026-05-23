@@ -29,7 +29,6 @@ use Imagine\Utils\ErrorHandling;
 /**
  * Imagine implementation using the Imagick PHP extension.
  *
- * @final
  */
 class Imagine extends AbstractImagine implements InfoProvider
 {
